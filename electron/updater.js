@@ -38,7 +38,12 @@ async function downloadUpdate() {
 }
 
 function quitAndInstall() {
-  autoUpdater.quitAndInstall();
+  // Silent + force-relaunch: the player already confirmed the update inside
+  // the launcher UI, so re-running the full "assisted" install wizard (the
+  // same one used for the very first install) would make them re-pick every
+  // option again on every update. Run the downloaded installer with /S and
+  // reopen the app automatically once it's done.
+  autoUpdater.quitAndInstall(true, true);
 }
 
 module.exports = { setSender, checkForUpdates, downloadUpdate, quitAndInstall };

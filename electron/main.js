@@ -21,6 +21,19 @@ function loadConfig() {
   return JSON.parse(raw);
 }
 
+// fs.renameSync can't move across drives (EXDEV) — fall back to copy+delete
+// when the staging folder (always on the OS temp drive) and the player's
+// chosen install drive differ.
+function moveDirSync(src, dest) {
+  try {
+    fs.renameSync(src, dest);
+  } catch (err) {
+    if (err.code !== 'EXDEV') throw err;
+    fs.cpSync(src, dest, { recursive: true });
+    fs.rmSync(src, { recursive: true, force: true });
+  }
+}
+
 // Suggested base folder shown the first time the player is asked where to
 // install the game. Never defaults to the launcher's own install directory
 // (e.g. Program Files) since that requires admin rights to write into.
@@ -31,11 +44,25 @@ function suggestedInstallBase(config) {
 function getInstallBase() {
   const settings = loadSettings();
   const config = loadConfig();
-  return settings.installPath || suggestedInstallBase(config);
+  if (settings.installPath && !isInsideLauncherDir(settings.installPath)) {
+    return settings.installPath;
+  }
+  return suggestedInstallBase(config);
 }
 
 function getInstallPath() {
   return path.join(getInstallBase(), 'game');
+}
+
+// The game folder must never live inside the launcher's own install
+// directory: launcher self-updates wipe and recreate that entire directory
+// (standard NSIS "uninstall old version" step before laying down the new
+// one), which would silently delete a nested game install along with it.
+function isInsideLauncherDir(candidate) {
+  if (!app.isPackaged) return false;
+  const launcherDir = path.dirname(app.getPath('exe'));
+  const rel = path.relative(launcherDir, candidate);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }
 
 function createSplashWindow() {
@@ -228,14 +255,27 @@ ipcMain.handle('app:use-default-install-path', () => {
 });
 
 ipcMain.handle('app:choose-install-path', async () => {
-  const config = loadConfig();
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Оберіть теку для встановлення гри',
     defaultPath: getInstallBase(),
     properties: ['openDirectory', 'createDirectory'],
   });
   if (result.canceled || !result.filePaths[0]) return null;
-  const base = path.join(result.filePaths[0], config.game.installDirName);
+  // Use exactly the folder the player picked — don't nest a branded
+  // subfolder inside it, otherwise re-picking the same folder on a later
+  // "Змінити" click would nest it again (…/WINTER GTA/WINTER GTA/game).
+  const base = result.filePaths[0];
+
+  if (isInsideLauncherDir(base)) {
+    await dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      title: 'Непідходяща тека',
+      message: 'Цю теку обрати не можна.',
+      detail: 'Гру не можна встановлювати в теку самого лаунчера — під час оновлення лаунчера ця тека повністю очищується, і гра буде видалена разом з нею. Оберіть іншу теку.',
+    });
+    return null;
+  }
+
   saveSettings({ installPath: base });
   return path.join(base, 'game');
 });
@@ -291,11 +331,21 @@ ipcMain.handle('app:download-game', async (event) => {
   const isZip = config.game.downloadUrl.toLowerCase().endsWith('.zip');
   if (isZip) {
     const extractZip = require('extract-zip');
-    // The archive's own top-level entry is "game/", which already matches the
-    // "<installDir>/game" install path — extract one level up so we don't end
-    // up with a doubled "game/game" nesting.
-    await extractZip(tempFile, { dir: path.dirname(installPath) });
+    // Extracting straight into path.dirname(installPath) (relying on the
+    // archive's own top-level "game/" entry to land in the right place)
+    // breaks whenever the player's chosen base folder is a bare drive root
+    // ("F:\"): extract-zip unconditionally mkdir's its target dir first,
+    // and Windows refuses mkdir on a drive root (EPERM) even though it
+    // already exists — unrelated to actual permissions. Extract into a
+    // scratch staging folder instead, then move the archive's "game"
+    // folder into place, so the extraction target is never a drive root.
+    const stagingDir = path.join(os.tmpdir(), `wintergta-extract-${Date.now()}`);
+    await extractZip(tempFile, { dir: stagingDir });
     fs.unlink(tempFile, () => {});
+
+    fs.rmSync(installPath, { recursive: true, force: true });
+    moveDirSync(path.join(stagingDir, 'game'), installPath);
+    fs.rmSync(stagingDir, { recursive: true, force: true });
   } else {
     // Installer executable: run it and wait for completion.
     await new Promise((resolve, reject) => {

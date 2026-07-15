@@ -294,7 +294,10 @@
   function openPanel(name) {
     WGSound.open();
     state.activePanel = name;
-    if (name === 'servers') renderServersPanel();
+    if (name === 'servers') {
+      renderServersPanel();
+      refreshServers().catch(() => {});
+    }
     el(`${name}-panel`).classList.remove('hidden');
     requestAnimationFrame(() => el(`${name}-panel`).classList.add('visible'));
   }
@@ -403,6 +406,23 @@
         setUpdateStatus(message || 'Помилка перевірки оновлень', 'is-error');
       }
     });
+  }
+
+  // ---------- Live server status polling ----------
+  const SERVER_REFRESH_MS = 15000;
+
+  async function refreshServers() {
+    const servers = await window.api.queryServers();
+    state.servers = servers;
+    renderDock();
+    renderNowPlaying();
+    if (state.activePanel === 'servers') renderServersPanel();
+  }
+
+  function startServerPolling() {
+    setInterval(() => {
+      refreshServers().catch(() => {});
+    }, SERVER_REFRESH_MS);
   }
 
   // ---------- Nav ----------
@@ -530,6 +550,7 @@
     state.servers = await window.api.queryServers();
     renderDock();
     await refreshInstallState();
+    startServerPolling();
   }
 
   init();
