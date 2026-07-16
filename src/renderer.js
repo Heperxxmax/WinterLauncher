@@ -260,7 +260,13 @@
     const ok = window.confirm('Гру буде повністю видалено та завантажено заново. Продовжити?');
     if (!ok) return;
     WGSound.click();
-    await window.api.reinstallGame();
+    try {
+      await window.api.reinstallGame();
+    } catch (err) {
+      WGSound.error();
+      el('status-text').textContent = friendlyDownloadError(err);
+      return;
+    }
     await startDownload();
   }
 
@@ -477,11 +483,16 @@
       setActiveNav('nav-servers');
     });
 
+    let volumeSaveTimer = null;
     el('volume-slider').addEventListener('input', (e) => {
       const v = Number(e.target.value);
       el('volume-value').textContent = `${v}%`;
       WGSound.setVolume(v);
-      window.api.saveVolume(v);
+      // Dragging fires 'input' dozens of times a second; each save is a
+      // synchronous disk write in the main process. Debounce so a drag ends
+      // in a single write instead of a burst.
+      clearTimeout(volumeSaveTimer);
+      volumeSaveTimer = setTimeout(() => window.api.saveVolume(v), 200);
     });
     el('volume-slider').addEventListener('change', () => WGSound.click());
 
@@ -510,6 +521,11 @@
       state.install = 'installed';
       renderAction();
       renderNowPlaying();
+    });
+
+    window.api.onGameLaunchError((message) => {
+      WGSound.error();
+      el('status-text').textContent = message || 'Помилка запуску';
     });
 
     window.api.onBeforeMinimize(() => document.body.classList.add('win-minimizing'));

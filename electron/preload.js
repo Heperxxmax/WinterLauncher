@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('download:progress', listener);
   },
   onGameExited: (callback) => ipcRenderer.on('game:exited', callback),
+  onGameLaunchError: (callback) => ipcRenderer.on('game:launch-error', (_e, message) => callback(message)),
   openExternal: (url) => ipcRenderer.send('app:open-external', url),
   minimize: () => ipcRenderer.send('window:minimize'),
   close: () => ipcRenderer.send('window:close'),

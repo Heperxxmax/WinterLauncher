@@ -1,12 +1,11 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const os = require('os');
 const { spawn } = require('child_process');
 
 const { loadSettings, saveSettings } = require('./store');
 const { queryServer } = require('../lib/aseQuery');
-const { downloadFile } = require('../lib/downloader');
+const { downloadFile, getContentLength } = require('../lib/downloader');
 const discordRpc = require('./discordRpc');
 const updater = require('./updater');
 
@@ -31,6 +30,18 @@ function moveDirSync(src, dest) {
     if (err.code !== 'EXDEV') throw err;
     fs.cpSync(src, dest, { recursive: true });
     fs.rmSync(src, { recursive: true, force: true });
+  }
+}
+
+// Free space on the drive holding `targetPath`, in bytes. Returns null if it
+// can't be determined (older Node/OS quirk) so callers can skip the check
+// rather than block the install on an unrelated failure.
+async function getFreeSpaceBytes(targetPath) {
+  try {
+    const stats = await fs.promises.statfs(targetPath);
+    return stats.bfree * stats.bsize;
+  } catch (_) {
+    return null;
   }
 }
 
@@ -158,13 +169,20 @@ app.whenReady().then(() => {
   createMainWindow();
   updater.setSender(mainWindow.webContents);
 
-  const config = loadConfig();
-  const settings = loadSettings();
-  discordRpc.setEnabled(settings.toggles.discord);
-  if (settings.toggles.discord) discordRpc.connect(config.discord && config.discord.clientId);
+  // Wrapped so a malformed config.json / settings.json can't turn into an
+  // unhandled promise rejection during startup — the window is already up and
+  // the renderer surfaces its own load error through app:get-config.
+  try {
+    const config = loadConfig();
+    const settings = loadSettings();
+    discordRpc.setEnabled(settings.toggles.discord);
+    if (settings.toggles.discord) discordRpc.connect(config.discord && config.discord.clientId);
 
-  if (settings.toggles.autoUpdate) {
-    mainWindow.webContents.once('did-finish-load', () => updater.checkForUpdates());
+    if (settings.toggles.autoUpdate) {
+      mainWindow.webContents.once('did-finish-load', () => updater.checkForUpdates());
+    }
+  } catch (err) {
+    console.error('Startup init failed:', err);
   }
 
   app.on('activate', () => {
@@ -282,32 +300,103 @@ ipcMain.handle('app:choose-install-path', async () => {
 
 ipcMain.handle('app:reinstall-game', () => {
   const installPath = getInstallPath();
-  fs.rmSync(installPath, { recursive: true, force: true });
+  try {
+    fs.rmSync(installPath, { recursive: true, force: true });
+  } catch (err) {
+    // Most likely the game (or an antivirus scan) still has a file open —
+    // rmSync throws EBUSY/EPERM in that case. Surface a message the player
+    // can act on instead of leaving the button silently doing nothing.
+    throw new Error('Не вдалося видалити попередню версію гри. Закрийте гру, якщо вона запущена, і спробуйте ще раз.');
+  }
   saveSettings({ installedVersion: null });
   return true;
 });
 
 let currentDownloadRequest = null;
 let downloadCancelled = false;
+let downloadInProgress = false;
 
 ipcMain.handle('app:download-game', async (event) => {
+  if (downloadInProgress) {
+    throw new Error('Завантаження вже триває.');
+  }
+  downloadInProgress = true;
+
+  try {
+    return await runDownload(event);
+  } finally {
+    downloadInProgress = false;
+  }
+});
+
+async function runDownload(event) {
   const config = loadConfig();
   const sender = event.sender;
+  const installBase = getInstallBase();
   const installPath = getInstallPath();
 
   if (!config.game.downloadUrl) {
     throw new Error('Не вказано посилання для завантаження гри (config.json -> game.downloadUrl).');
   }
 
+  const isZip = config.game.downloadUrl.toLowerCase().endsWith('.zip');
+
+  // Staging area lives next to the install folder, on the same drive the
+  // player picked in settings, so the download never touches the OS drive
+  // and the final move is a same-drive rename instead of a cross-drive copy.
+  const tempDir = path.join(installBase, '.wgta-tmp');
+
+  let expectedSize = 0;
+  try {
+    expectedSize = await getContentLength(config.game.downloadUrl);
+  } catch (_) {
+    expectedSize = 0;
+  }
+
+  if (expectedSize > 0) {
+    // Zip installs need room for both the downloaded archive and its
+    // extracted copy at the same time; installer .exe only needs the
+    // download itself plus whatever it unpacks internally.
+    const multiplier = isZip ? 2.2 : 1.3;
+    const safetyMargin = 200 * 1024 * 1024;
+    const required = expectedSize * multiplier + safetyMargin;
+    const free = await getFreeSpaceBytes(installBase);
+    if (free !== null && free < required) {
+      const toGb = (bytes) => (bytes / (1024 ** 3)).toFixed(1);
+      throw new Error(
+        `Недостатньо вільного місця на диску для встановлення гри. ` +
+        `Потрібно приблизно ${toGb(required)} ГБ, доступно ${toGb(free)} ГБ.`
+      );
+    }
+  }
+
+  // Don't mkdir installBase directly: if the player picked a bare drive
+  // root ("F:\"), Windows returns EPERM for mkdir on an existing root even
+  // though it's already there. Creating tempDir instead makes installBase
+  // an intermediate directory in the recursive walk, never the mkdir target.
+  // Created only once the space check has passed, so a failed check never
+  // leaves an orphaned .wgta-tmp folder behind.
+  fs.mkdirSync(tempDir, { recursive: true });
+
   fs.mkdirSync(installPath, { recursive: true });
-  const tempFile = path.join(os.tmpdir(), `wintergta-setup-${Date.now()}.tmp`);
+  const tempFile = path.join(tempDir, `wintergta-setup-${Date.now()}.tmp`);
   downloadCancelled = false;
+
+  // `onProgress` fires on every TCP chunk — for a multi-GB file that's up to
+  // thousands of calls per second. Forwarding each one straight to an IPC
+  // send and an async Discord RPC call saturates the event loop and visibly
+  // slows the download itself, so only forward at most a few times a second.
+  const PROGRESS_INTERVAL_MS = 200;
+  let lastProgressAt = 0;
 
   try {
     await downloadFile(
       config.game.downloadUrl,
       tempFile,
       (fraction) => {
+        const now = Date.now();
+        if (fraction < 1 && now - lastProgressAt < PROGRESS_INTERVAL_MS) return;
+        lastProgressAt = now;
         sender.send('download:progress', { phase: 'downloading', fraction });
         discordRpc.setDownloading(fraction);
       },
@@ -316,7 +405,7 @@ ipcMain.handle('app:download-game', async (event) => {
       }
     );
   } catch (err) {
-    fs.unlink(tempFile, () => {});
+    fs.rmSync(tempDir, { recursive: true, force: true });
     if (downloadCancelled) {
       sender.send('download:progress', { phase: 'cancelled', fraction: 0 });
       return false;
@@ -328,44 +417,47 @@ ipcMain.handle('app:download-game', async (event) => {
 
   sender.send('download:progress', { phase: 'installing', fraction: 1 });
 
-  const isZip = config.game.downloadUrl.toLowerCase().endsWith('.zip');
-  if (isZip) {
-    const extractZip = require('extract-zip');
-    // Extracting straight into path.dirname(installPath) (relying on the
-    // archive's own top-level "game/" entry to land in the right place)
-    // breaks whenever the player's chosen base folder is a bare drive root
-    // ("F:\"): extract-zip unconditionally mkdir's its target dir first,
-    // and Windows refuses mkdir on a drive root (EPERM) even though it
-    // already exists — unrelated to actual permissions. Extract into a
-    // scratch staging folder instead, then move the archive's "game"
-    // folder into place, so the extraction target is never a drive root.
-    const stagingDir = path.join(os.tmpdir(), `wintergta-extract-${Date.now()}`);
-    await extractZip(tempFile, { dir: stagingDir });
-    fs.unlink(tempFile, () => {});
+  try {
+    if (isZip) {
+      const extractZip = require('extract-zip');
+      // Extracting straight into path.dirname(installPath) (relying on the
+      // archive's own top-level "game/" entry to land in the right place)
+      // breaks whenever the player's chosen base folder is a bare drive root
+      // ("F:\"): extract-zip unconditionally mkdir's its target dir first,
+      // and Windows refuses mkdir on a drive root (EPERM) even though it
+      // already exists — unrelated to actual permissions. Extract into a
+      // scratch staging folder instead, then move the archive's "game"
+      // folder into place, so the extraction target is never a drive root.
+      const stagingDir = path.join(tempDir, `wintergta-extract-${Date.now()}`);
+      await extractZip(tempFile, { dir: stagingDir });
 
-    fs.rmSync(installPath, { recursive: true, force: true });
-    moveDirSync(path.join(stagingDir, 'game'), installPath);
-    fs.rmSync(stagingDir, { recursive: true, force: true });
-  } else {
-    // Installer executable: run it and wait for completion.
-    await new Promise((resolve, reject) => {
-      const child = spawn(tempFile, ['/S'], { detached: false });
-      child.on('exit', () => resolve());
-      child.on('error', reject);
-    });
-    fs.unlink(tempFile, () => {});
+      fs.rmSync(installPath, { recursive: true, force: true });
+      moveDirSync(path.join(stagingDir, 'game'), installPath);
+    } else {
+      // Installer executable: run it and wait for completion.
+      await new Promise((resolve, reject) => {
+        const child = spawn(tempFile, ['/S'], { detached: false });
+        child.on('exit', () => resolve());
+        child.on('error', reject);
+      });
+    }
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
   }
 
   saveSettings({ installedVersion: config.game.version || null });
   sender.send('download:progress', { phase: 'done', fraction: 1 });
   discordRpc.setIdle();
   return true;
-});
+}
 
 ipcMain.on('app:cancel-download', () => {
   downloadCancelled = true;
   if (currentDownloadRequest) {
-    currentDownloadRequest.destroy();
+    // destroy() with no argument doesn't reliably emit 'error' on the
+    // request, so the download promise never settles and the UI is stuck
+    // showing "downloading" forever — pass an error so it always does.
+    currentDownloadRequest.destroy(new Error('Завантаження скасовано користувачем.'));
   }
 });
 
@@ -391,6 +483,17 @@ ipcMain.handle('app:launch-game', async (event, serverId) => {
   child.on('exit', () => {
     discordRpc.setIdle();
     if (!sender.isDestroyed()) sender.send('game:exited');
+  });
+  // A ChildProcess that emits 'error' with no listener throws and crashes the
+  // whole main process. This fires if the exe can't actually start (deleted or
+  // locked between the existsSync check and spawn, EACCES, etc.) — handle it so
+  // the launcher survives and the UI is released from the "running" state.
+  child.on('error', () => {
+    discordRpc.setIdle();
+    if (!sender.isDestroyed()) {
+      sender.send('game:launch-error', 'Не вдалося запустити гру. Спробуйте перевстановити її.');
+      sender.send('game:exited');
+    }
   });
   child.unref();
   return true;

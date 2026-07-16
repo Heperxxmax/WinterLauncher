@@ -20,9 +20,18 @@ const DEFAULTS = {
 function loadSettings() {
   try {
     const raw = fs.readFileSync(SETTINGS_FILE(), 'utf8');
-    return { ...DEFAULTS, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    // Deep-merge `toggles`: a plain top-level spread would replace the whole
+    // toggles object, so a settings.json written by an older build (missing a
+    // toggle key added later, e.g. `discord`) would leave that key undefined
+    // and silently disable the feature. Merge sub-keys against the defaults.
+    return {
+      ...DEFAULTS,
+      ...parsed,
+      toggles: { ...DEFAULTS.toggles, ...(parsed && parsed.toggles) },
+    };
   } catch (_) {
-    return { ...DEFAULTS };
+    return { ...DEFAULTS, toggles: { ...DEFAULTS.toggles } };
   }
 }
 
