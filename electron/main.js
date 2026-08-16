@@ -405,6 +405,48 @@ ipcMain.handle('app:reinstall-game', async () => {
   return true;
 });
 
+// `game.downloadUrl` takes either a single URL or a list of mirrors. Falling
+// through to the next entry when a host fails lets a blocked or dead mirror be
+// routed around by editing config.json, with no new launcher build.
+function resolveDownloadUrls(config) {
+  const raw = config.game.downloadUrl;
+  const list = Array.isArray(raw) ? raw : [raw];
+  return list
+    .filter((url) => typeof url === 'string' && url.trim())
+    .map((url) => url.trim());
+}
+
+// The download host answers with an HTTP status; the player sees a status
+// line. A raw "Download failed: HTTP 403" gives them nothing to act on and
+// hides the fact that the failure is on the hosting side, not on their PC —
+// so translate the statuses that have a real, actionable cause.
+function describeDownloadError(err, config) {
+  if (!err || !err.statusCode) return err;
+  const site = config.siteUrl ? ` Завантажте гру з сайту: ${config.siteUrl}` : '';
+  if (err.botChallenge) {
+    return new Error(
+      `Сервер завантаження блокує лаунчер (захист від ботів на стороні хостингу).${site}`
+    );
+  }
+  if (err.statusCode === 404 || err.statusCode === 410) {
+    return new Error(
+      'Файл гри не знайдено на сервері завантаження. Зачекайте, поки адміністрація оновить посилання.'
+    );
+  }
+  if (err.statusCode === 401 || err.statusCode === 403) {
+    return new Error(`Сервер завантаження відхилив запит (HTTP ${err.statusCode}).${site}`);
+  }
+  if (err.statusCode === 429) {
+    return new Error('Забагато запитів до сервера завантаження. Спробуйте за кілька хвилин.');
+  }
+  if (err.statusCode >= 500) {
+    return new Error(
+      `Сервер завантаження тимчасово недоступний (HTTP ${err.statusCode}). Спробуйте пізніше.`
+    );
+  }
+  return err;
+}
+
 let currentDownloadRequest = null;
 let downloadCancelled = false;
 let downloadInProgress = false;
@@ -504,6 +546,7 @@ async function runDownload(event) {
   // player picked in settings, so the download never touches the OS drive
   // and the final move is a same-drive rename instead of a cross-drive copy.
   const tempDir = path.join(installBase, '.wgta-tmp');
+  const tempFile = path.join(tempDir, `wintergta-setup-${Date.now()}.tmp`);
 
   let expectedSize = 0;
   for (const url of downloadUrls) {
@@ -613,6 +656,87 @@ async function runDownload(event) {
       currentDownloadRequest = null;
     }
 
+  downloadCancelled = false;
+  let downloadedUrl = null;
+  let lastError = null;
+
+  for (const url of downloadUrls) {
+    let expectedSize = 0;
+    try {
+      expectedSize = await getContentLength(url);
+    } catch (_) {
+      expectedSize = 0;
+    }
+
+    if (expectedSize > 0) {
+      // Zip installs need room for both the downloaded archive and its
+      // extracted copy at the same time; installer .exe only needs the
+      // download itself plus whatever it unpacks internally.
+      const multiplier = url.toLowerCase().endsWith('.zip') ? 2.2 : 1.3;
+      const safetyMargin = 200 * 1024 * 1024;
+      const required = expectedSize * multiplier + safetyMargin;
+      const free = await getFreeSpaceBytes(installBase);
+      if (free !== null && free < required) {
+        const toGb = (bytes) => (bytes / (1024 ** 3)).toFixed(1);
+        // Not a mirror problem: every mirror serves the same file, so the
+        // next one would fail this same check. Abort the whole install.
+        throw new Error(
+          `Недостатньо вільного місця на диску для встановлення гри. ` +
+          `Потрібно приблизно ${toGb(required)} ГБ, доступно ${toGb(free)} ГБ.`
+        );
+      }
+    }
+
+    // Don't mkdir installBase directly: if the player picked a bare drive
+    // root ("F:\"), Windows returns EPERM for mkdir on an existing root even
+    // though it's already there. Creating tempDir instead makes installBase
+    // an intermediate directory in the recursive walk, never the mkdir target.
+    // Created only once the space check has passed, so a failed check never
+    // leaves an orphaned .wgta-tmp folder behind.
+    fs.mkdirSync(tempDir, { recursive: true });
+
+    fs.mkdirSync(installPath, { recursive: true });
+
+    try {
+      await downloadFile(
+        url,
+        tempFile,
+        (fraction) => {
+          const now = Date.now();
+          if (fraction < 1 && now - lastProgressAt < PROGRESS_INTERVAL_MS) return;
+          lastProgressAt = now;
+          sender.send('download:progress', { phase: 'downloading', fraction });
+          discordRpc.setDownloading(fraction);
+        },
+        (req) => {
+          currentDownloadRequest = req;
+        }
+      );
+      downloadedUrl = url;
+    } catch (err) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      if (downloadCancelled) {
+        sender.send('download:progress', { phase: 'cancelled', fraction: 0 });
+        return false;
+      }
+      lastError = err;
+    } finally {
+      currentDownloadRequest = null;
+    }
+
+    if (downloadedUrl) break;
+    // The failed mirror may have moved the bar; let the next attempt's first
+    // progress event through immediately instead of waiting out the throttle.
+    lastProgressAt = 0;
+  }
+
+  if (!downloadedUrl) {
+    throw describeDownloadError(lastError, config) || new Error('Не вдалося завантажити гру.');
+  }
+
+  const isZip = downloadedUrl.toLowerCase().endsWith('.zip');
+
+  sender.send('download:progress', { phase: 'installing', fraction: 1 });
     if (downloaded) break;
     // Let the next mirror's first progress event through immediately instead
     // of waiting out the throttle left over from the failed one.
