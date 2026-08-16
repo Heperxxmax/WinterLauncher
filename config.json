@@ -28,8 +28,8 @@
       "label": "02",
       "name": "Західна Україна",
       "mode": "Roleplay · RPG",
-      "host": "127.0.0.1",
-      "port": 22004,
+      "host": "g1.ketrix.cloud",
+      "port": 30334,
       "queryPortOffset": 123,
       "status": "closed",
       "statusLabel": "Тимчасово закрито"

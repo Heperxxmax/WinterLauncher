@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('api', {
   chooseInstallPath: () => ipcRenderer.invoke('app:choose-install-path'),
   downloadGame: () => ipcRenderer.invoke('app:download-game'),
   reinstallGame: () => ipcRenderer.invoke('app:reinstall-game'),
+  verifyGame: () => ipcRenderer.invoke('app:verify-game'),
+  openLogs: () => ipcRenderer.invoke('app:open-logs'),
   cancelDownload: () => ipcRenderer.send('app:cancel-download'),
   launchGame: (serverId) => ipcRenderer.invoke('app:launch-game', serverId),
   saveSelectedServer: (serverId) => ipcRenderer.invoke('app:save-selected-server', serverId),
