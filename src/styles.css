@@ -539,6 +539,15 @@ button {
   color: var(--accent);
 }
 
+.progress-sub {
+  margin-top: 6px;
+  font: 500 11px "Manrope", sans-serif;
+  color: #8ea0b5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .progress-track {
   height: 9px;
   border-radius: 6px;

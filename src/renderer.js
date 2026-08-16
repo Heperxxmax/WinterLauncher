@@ -40,6 +40,29 @@
     return `${server.players}${max} гравців`;
   }
 
+  function fmtBytes(bytes) {
+    if (!bytes || bytes < 0) return '0 МБ';
+    const gb = bytes / 1024 ** 3;
+    if (gb >= 1) return `${gb.toFixed(1)} ГБ`;
+    return `${Math.round(bytes / 1024 ** 2)} МБ`;
+  }
+
+  function fmtSpeed(bytesPerSecond) {
+    if (!bytesPerSecond || bytesPerSecond <= 0) return '';
+    return `${(bytesPerSecond / 1024 ** 2).toFixed(1)} МБ/с`;
+  }
+
+  // Deliberately coarse: a to-the-second countdown on a 20-minute download
+  // just draws attention to how much it jitters.
+  function fmtEta(seconds) {
+    if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) return '';
+    if (seconds < 60) return 'менше хвилини';
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return `~${minutes} хв`;
+    const hours = Math.floor(minutes / 60);
+    return `~${hours} год ${minutes % 60} хв`;
+  }
+
   function selectedServer() {
     return state.servers.find((s) => s.id === state.selectedServerId) || state.servers[0] || null;
   }
@@ -66,22 +89,46 @@
   }
 
   // ---------- Dock ----------
+  function pillMetaText(server) {
+    const ping = server.online && server.ping !== null ? ` · ${server.ping} ms` : '';
+    return `${fmtPlayers(server)}${ping}`;
+  }
+
+  // Called on every 15-second poll. Rebuilding the pills from innerHTML each
+  // time threw away and recreated live DOM nodes — which restarts their CSS
+  // transitions, drops hover state and re-runs layout for markup that is
+  // identical apart from two numbers. Build once, then patch only the text and
+  // colour that actually change.
   function renderDock() {
     const dock = el('dock-servers');
-    const indicator = el('dock-indicator');
-    dock.querySelectorAll('.server-pill').forEach((n) => n.remove());
+    const existing = dock.querySelectorAll('.server-pill');
+    const sameShape = existing.length === state.servers.length;
+
+    if (sameShape) {
+      state.servers.forEach((server, index) => {
+        const pill = existing[index];
+        if (pill.dataset.serverId !== String(server.id)) return;
+        pill.querySelector('.pill-meta-dot').style.background = pingColor(server.ping);
+        pill.querySelector('.pill-meta-text').textContent = pillMetaText(server);
+      });
+      requestAnimationFrame(positionIndicator);
+      return;
+    }
+
+    existing.forEach((node) => node.remove());
 
     state.servers.forEach((server) => {
       const closed = !!server.status;
       const pill = document.createElement('button');
       pill.className = 'server-pill' + (closed ? ' disabled' : '');
+      pill.dataset.serverId = String(server.id);
       pill.innerHTML = `
         <div class="pill-badge">${server.label ?? ''}</div>
         <div class="pill-info">
           <div class="pill-name">${server.name}</div>
           <div class="pill-meta">
             <span class="pill-meta-dot" style="background:${pingColor(server.ping)}"></span>
-            <span class="pill-meta-text">${fmtPlayers(server)}${server.online && server.ping !== null ? ' · ' + server.ping + ' ms' : ''}</span>
+            <span class="pill-meta-text">${pillMetaText(server)}</span>
           </div>
         </div>
       `;
@@ -162,13 +209,23 @@
     const reinstallRow = el('reinstall-row');
     reinstallRow.style.display = (state.install === 'installed' || state.install === 'updateAvailable') ? '' : 'none';
 
+    // Integrity checking is manifest-only — without one there are no per-file
+    // hashes to compare against, so the button would do nothing but raise an
+    // error. Hide it rather than let players find it and get told "no".
+    const verifyButton = el('btn-verify');
+    if (verifyButton) {
+      const hasManifest = !!(state.config && state.config.game && state.config.game.manifestUrl);
+      verifyButton.style.display = hasManifest ? '' : 'none';
+    }
+
     if (state.install === 'downloading') {
       const pct = Math.round(state.progress * 100);
       area.innerHTML = `
         <div class="progress-wrap">
           <div class="progress-info">
-            <div class="progress-head"><span>Завантаження та встановлення…</span><span class="pct">${pct}%</span></div>
+            <div class="progress-head"><span id="progress-label">Завантаження та встановлення…</span><span class="pct">${pct}%</span></div>
             <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:${pct}%"></div></div>
+            <div class="progress-sub" id="progress-sub"></div>
           </div>
           <button class="cancel-btn" id="btn-cancel" title="Скасувати">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -268,6 +325,35 @@
       return;
     }
     await startDownload();
+  }
+
+  // Cheap alternative to "перевстановити гру" for a broken install: re-hash
+  // every file against the manifest and report what is wrong, without deleting
+  // anything or re-downloading gigabytes.
+  async function verifyGame() {
+    const status = el('verify-status');
+    const button = el('btn-verify');
+    WGSound.click();
+    button.disabled = true;
+    status.textContent = 'Перевіряємо файли гри...';
+
+    try {
+      const report = await window.api.verifyGame();
+      if (report.ok) {
+        status.textContent = `Усе гаразд: перевірено ${report.okCount} файлів.`;
+      } else {
+        const parts = [];
+        if (report.missing) parts.push(`відсутніх: ${report.missing}`);
+        if (report.changed) parts.push(`пошкоджених: ${report.changed}`);
+        status.textContent =
+          `Знайдено проблеми (${parts.join(', ')}). Натисніть «ОНОВИТИ», щоб відновити ці файли.`;
+      }
+    } catch (err) {
+      WGSound.error();
+      status.textContent = err && err.message ? err.message : 'Не вдалося перевірити файли.';
+    } finally {
+      button.disabled = false;
+    }
   }
 
   // ---------- Settings panel ----------
@@ -449,6 +535,11 @@
     el('btn-close-settings').addEventListener('click', closePanel);
     el('btn-close-servers').addEventListener('click', closePanel);
     el('btn-reinstall').addEventListener('click', reinstallGame);
+    el('btn-verify').addEventListener('click', verifyGame);
+    el('btn-open-logs').addEventListener('click', () => {
+      WGSound.click();
+      window.api.openLogs();
+    });
     el('btn-change-path').addEventListener('click', changeInstallPath);
     el('btn-check-update').addEventListener('click', checkLauncherUpdate);
     el('btn-modal-browse').addEventListener('click', async () => {
@@ -502,15 +593,67 @@
 
     window.addEventListener('resize', () => positionIndicator());
 
-    window.api.onDownloadProgress(({ phase, fraction }) => {
-      if (phase === 'downloading') {
-        state.progress = fraction;
+    window.api.onDownloadProgress((payload) => {
+      const { phase, fraction } = payload;
+
+      // Kept in state as well as pushed to the DOM: renderAction() rebuilds the
+      // progress markup from state.progress whenever the action area re-renders.
+      const setProgress = (value) => {
+        state.progress = value;
+        const pct = Math.round(value * 100);
         const fill = el('progress-fill');
         const pctEl = document.querySelector('.progress-head .pct');
-        if (fill) fill.style.width = `${Math.round(fraction * 100)}%`;
-        if (pctEl) pctEl.textContent = `${Math.round(fraction * 100)}%`;
+        if (fill) fill.style.width = `${pct}%`;
+        if (pctEl) pctEl.textContent = `${pct}%`;
+      };
+
+      const setLabel = (text) => {
+        const label = el('progress-label');
+        if (label) label.textContent = text;
+      };
+      const setSub = (text) => {
+        const sub = el('progress-sub');
+        if (sub) sub.textContent = text;
+      };
+
+      if (phase === 'downloading') {
+        setProgress(fraction);
+        setLabel('Завантаження…');
+        // The whole point of the sub-line: a 20-minute transfer with only a
+        // percentage looks stuck, while "5.2 МБ/с · лишилось ~12 хв" reads as
+        // obviously alive.
+        const speed = fmtSpeed(payload.bytesPerSecond);
+        const eta = fmtEta(payload.secondsLeft);
+        const size = payload.total
+          ? `${fmtBytes(payload.received)} з ${fmtBytes(payload.total)}`
+          : '';
+        setSub([size, speed, eta && `лишилось ${eta}`].filter(Boolean).join(' · '));
+        // Clears a leftover "retrying" message once bytes start flowing again.
+        el('status-text').textContent = 'Завантаження та встановлення';
+      } else if (phase === 'retrying') {
+        const seconds = Math.max(1, Math.round((payload.delayMs || 0) / 1000));
+        const message = `З'єднання втрачено. Повтор ${payload.attempt}/${payload.retries} через ${seconds} с...`;
+        el('status-text').textContent = message;
+        setSub(message);
+      } else if (phase === 'checking') {
+        setProgress(fraction || 0);
+        setLabel('Перевірка файлів гри…');
+        setSub(payload.file || '');
+        el('status-text').textContent = 'Перевірка файлів';
+      } else if (phase === 'verifying') {
+        setProgress(fraction || 0);
+        setLabel('Перевірка архіву…');
+        setSub('');
+        el('status-text').textContent = 'Перевірка архіву';
       } else if (phase === 'installing') {
-        el('status-text').textContent = 'Встановлення...';
+        // Unpacking restarts the bar from 0 — it is a second long phase, not a
+        // continuation of the download.
+        setProgress(fraction || 0);
+        setLabel('Встановлення…');
+        setSub('');
+        el('status-text').textContent = fraction
+          ? `Встановлення... ${Math.round(fraction * 100)}%`
+          : 'Встановлення...';
       } else if (phase === 'cancelled') {
         state.install = 'notInstalled';
         renderAction();

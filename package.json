@@ -1,6 +1,6 @@
 {
   "name": "winter-gta-launcher",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "WINTER GTA launcher",
   "main": "electron/main.js",
   "author": "Winter GTA",
@@ -13,7 +13,7 @@
     "package:win": "electron-packager . \"WINTER GTA\" --platform=win32 --arch=x64 --out=dist --overwrite --asar --icon=src/assets/icon.ico"
   },
   "devDependencies": {
-    "electron": "^31.0.0",
+    "electron": "^43.2.0",
     "electron-builder": "^24.13.3",
     "electron-packager": "^17.1.2",
     "png-to-ico": "^3.0.2"
@@ -52,6 +52,6 @@
     ]
   },
   "allowScripts": {
-    "electron@31.7.7": true
+    "electron@43.2.0": true
   }
 }

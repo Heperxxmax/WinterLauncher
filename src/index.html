@@ -86,10 +86,12 @@
         </div>
         <div id="toggles-list"></div>
         <div class="setting-row" id="reinstall-row" style="display:none;">
-          <div class="setting-label">Переустановлення</div>
+          <div class="setting-label">Обслуговування гри</div>
           <div class="path-row">
+            <button class="btn" id="btn-verify">Перевірити цілісність</button>
             <button class="btn btn-danger" id="btn-reinstall">Перевстановити гру</button>
           </div>
+          <div class="update-status" id="verify-status"></div>
         </div>
         <div class="setting-row">
           <div class="setting-label">Лаунчер</div>
@@ -98,6 +100,13 @@
             <button class="btn" id="btn-check-update">Перевірити оновлення</button>
           </div>
           <div class="update-status" id="launcher-update-status"></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">Діагностика</div>
+          <div class="path-row">
+            <span class="path-value">Журнал роботи лаунчера</span>
+            <button class="btn" id="btn-open-logs">Відкрити логи</button>
+          </div>
         </div>
         <div class="volume-row">
           <div class="volume-row-header">
