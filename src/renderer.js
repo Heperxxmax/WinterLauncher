@@ -20,8 +20,19 @@
     volume: 70,
   };
 
+  // ipcRenderer.invoke prefixes every rejection with
+  // "Error invoking remote method 'app:download-game': Error: ". That prefix
+  // was going straight onto the status line in front of players, burying the
+  // actual message inside launcher internals they can't do anything with.
+  function ipcMessage(err) {
+    return ((err && err.message) || '')
+      .replace(/^Error invoking remote method '[^']*':\s*/, '')
+      .replace(/^(?:Error|TypeError|RangeError):\s*/, '')
+      .trim();
+  }
+
   function friendlyDownloadError(err) {
-    const message = (err && err.message) || '';
+    const message = ipcMessage(err);
     if (/ENOSPC/.test(message)) return 'Недостатньо вільного місця на диску для встановлення гри. Звільніть місце або оберіть іншу теку в налаштуваннях.';
     if (/EPERM|EACCES/.test(message)) return 'Немає прав для запису у вибрану теку. Оберіть іншу теку в налаштуваннях або запустіть лаунчер від імені адміністратора.';
     return message || 'Помилка встановлення';
@@ -283,7 +294,7 @@
         renderNowPlaying();
       } catch (err) {
         WGSound.error();
-        el('status-text').textContent = err.message || 'Помилка запуску';
+        el('status-text').textContent = ipcMessage(err) || 'Помилка запуску';
       }
     }
   }
@@ -350,7 +361,7 @@
       }
     } catch (err) {
       WGSound.error();
-      status.textContent = err && err.message ? err.message : 'Не вдалося перевірити файли.';
+      status.textContent = ipcMessage(err) || 'Не вдалося перевірити файли.';
     } finally {
       button.disabled = false;
     }

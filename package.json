@@ -1,6 +1,6 @@
 {
   "name": "winter-gta-launcher",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "WINTER GTA launcher",
   "main": "electron/main.js",
   "author": "Winter GTA",

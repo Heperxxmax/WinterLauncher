@@ -438,6 +438,48 @@ function assertSecureUrl(url, label) {
   }
 }
 
+// `game.downloadUrl` takes either a single URL or a list of mirrors. Falling
+// through to the next entry when a host fails lets a blocked or dead mirror be
+// routed around by editing config.json, with no new launcher build.
+function resolveDownloadUrls(config) {
+  const raw = config.game.downloadUrl;
+  const list = Array.isArray(raw) ? raw : [raw];
+  return list
+    .filter((url) => typeof url === 'string' && url.trim())
+    .map((url) => url.trim());
+}
+
+// The download host answers with an HTTP status; the player sees a status
+// line. A raw "Download failed: HTTP 403" gives them nothing to act on and
+// hides the fact that the failure is on the hosting side, not on their PC —
+// so translate the statuses that have a real, actionable cause.
+function describeDownloadError(err, config) {
+  if (!err || !err.statusCode) return err;
+  const site = config.siteUrl ? ` Завантажте гру з сайту: ${config.siteUrl}` : '';
+  if (err.botChallenge) {
+    return new Error(
+      `Сервер завантаження блокує лаунчер (захист від ботів на стороні хостингу).${site}`
+    );
+  }
+  if (err.statusCode === 404 || err.statusCode === 410) {
+    return new Error(
+      'Файл гри не знайдено на сервері завантаження. Зачекайте, поки адміністрація оновить посилання.'
+    );
+  }
+  if (err.statusCode === 401 || err.statusCode === 403) {
+    return new Error(`Сервер завантаження відхилив запит (HTTP ${err.statusCode}).${site}`);
+  }
+  if (err.statusCode === 429) {
+    return new Error('Забагато запитів до сервера завантаження. Спробуйте за кілька хвилин.');
+  }
+  if (err.statusCode >= 500) {
+    return new Error(
+      `Сервер завантаження тимчасово недоступний (HTTP ${err.statusCode}). Спробуйте пізніше.`
+    );
+  }
+  return err;
+}
+
 async function runDownload(event) {
   const config = loadConfig();
   const sender = event.sender;
@@ -450,12 +492,13 @@ async function runDownload(event) {
     return runManifestSync(event, config);
   }
 
-  if (!config.game.downloadUrl) {
+  const downloadUrls = resolveDownloadUrls(config);
+  if (!downloadUrls.length) {
     throw new Error('Не вказано посилання для завантаження гри (config.json -> game.downloadUrl).');
   }
-  assertSecureUrl(config.game.downloadUrl, 'game.downloadUrl');
+  downloadUrls.forEach((url) => assertSecureUrl(url, 'game.downloadUrl'));
 
-  const isZip = config.game.downloadUrl.toLowerCase().endsWith('.zip');
+  const isZip = downloadUrls[0].toLowerCase().endsWith('.zip');
 
   // Staging area lives next to the install folder, on the same drive the
   // player picked in settings, so the download never touches the OS drive
@@ -463,10 +506,13 @@ async function runDownload(event) {
   const tempDir = path.join(installBase, '.wgta-tmp');
 
   let expectedSize = 0;
-  try {
-    expectedSize = await getContentLength(config.game.downloadUrl);
-  } catch (_) {
-    expectedSize = 0;
+  for (const url of downloadUrls) {
+    try {
+      expectedSize = await getContentLength(url);
+      break;
+    } catch (_) {
+      expectedSize = 0;
+    }
   }
 
   if (expectedSize > 0) {
@@ -511,52 +557,70 @@ async function runDownload(event) {
   let lastProgressAt = 0;
   const speed = createSpeedMeter();
 
-  log.info(`download starting: ${config.game.downloadUrl}`);
+  let downloaded = false;
+  let lastError = null;
 
-  try {
-    await downloadFile(config.game.downloadUrl, tempFile, {
-      onProgress: (fraction, received, total) => {
-        const now = Date.now();
-        if (fraction < 1 && now - lastProgressAt < PROGRESS_INTERVAL_MS) return;
-        lastProgressAt = now;
-        const { bytesPerSecond, secondsLeft } = speed.sample(received, total);
-        sender.send('download:progress', {
-          phase: 'downloading',
-          fraction,
-          received,
-          total,
-          bytesPerSecond,
-          secondsLeft,
-        });
-        discordRpc.setDownloading(fraction);
-      },
-      onRequest: (req) => {
-        currentDownloadRequest = req;
-      },
-      isCancelled: () => downloadCancelled,
-      onRetry: ({ attempt, retries, delayMs }) => {
-        // Tell the player the launcher is retrying rather than leaving the bar
-        // frozen — a silent pause reads as a freeze and gets it killed.
-        sender.send('download:progress', {
-          phase: 'retrying',
-          attempt,
-          retries,
-          delayMs,
-        });
-      },
-    });
-  } catch (err) {
-    if (downloadCancelled) {
-      // An explicit cancel is the one case where the partial file is useless:
-      // the player asked for it gone.
-      await fs.promises.rm(tempDir, { recursive: true, force: true });
-      sender.send('download:progress', { phase: 'cancelled', fraction: 0 });
-      return false;
+  for (const url of downloadUrls) {
+    log.info(`download starting: ${url}`);
+
+    try {
+      await downloadFile(url, tempFile, {
+        onProgress: (fraction, received, total) => {
+          const now = Date.now();
+          if (fraction < 1 && now - lastProgressAt < PROGRESS_INTERVAL_MS) return;
+          lastProgressAt = now;
+          const { bytesPerSecond, secondsLeft } = speed.sample(received, total);
+          sender.send('download:progress', {
+            phase: 'downloading',
+            fraction,
+            received,
+            total,
+            bytesPerSecond,
+            secondsLeft,
+          });
+          discordRpc.setDownloading(fraction);
+        },
+        onRequest: (req) => {
+          currentDownloadRequest = req;
+        },
+        isCancelled: () => downloadCancelled,
+        onRetry: ({ attempt, retries, delayMs }) => {
+          // Tell the player the launcher is retrying rather than leaving the bar
+          // frozen — a silent pause reads as a freeze and gets it killed.
+          sender.send('download:progress', {
+            phase: 'retrying',
+            attempt,
+            retries,
+            delayMs,
+          });
+        },
+      });
+      downloaded = true;
+    } catch (err) {
+      if (downloadCancelled) {
+        // An explicit cancel is the one case where the partial file is useless:
+        // the player asked for it gone.
+        await fs.promises.rm(tempDir, { recursive: true, force: true });
+        sender.send('download:progress', { phase: 'cancelled', fraction: 0 });
+        return false;
+      }
+      // Any other failure keeps .wgta-tmp intact so the next attempt resumes.
+      // downloadFile drops the partial by itself when the next mirror is a
+      // different URL, so a half-file from a dead host is never appended to.
+      lastError = err;
+      log.warn(`download failed from ${url}: ${err && err.message}`);
+    } finally {
+      currentDownloadRequest = null;
     }
-    // Any other failure keeps .wgta-tmp intact so the next attempt resumes.
-    throw err;
-  } finally {
-    currentDownloadRequest = null;
+
+    if (downloaded) break;
+    // Let the next mirror's first progress event through immediately instead
+    // of waiting out the throttle left over from the failed one.
+    lastProgressAt = 0;
+  }
+
+  if (!downloaded) {
+    throw describeDownloadError(lastError, config) || new Error('Не вдалося завантажити гру.');
   }
 
   // Content-Length only proves the right *number* of bytes arrived, not the
