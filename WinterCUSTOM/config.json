@@ -1,0 +1,48 @@
+{
+  "launcherTitle": "WINTER GTA",
+  "siteUrl": "https://winterua.qniks.me",
+  "forumUrl": "https://forum-winter-gta.qniks.me",
+  "discordUrl": "https://discord.gg/An4Mcy5W3U",
+  "telegramUrl": "https://t.me/example",
+  "newsUrl": "",
+  "news": [
+    {
+      "date": "09.07.2026",
+      "title": "WINTER 4.0",
+      "subtitle": "Наша команда старалась над 4.0 и мы ето зеделали!",
+      "image": ""
+    }
+  ],
+  "servers": [
+    {
+      "id": 1,
+      "label": "01",
+      "name": "Центральна Україна",
+      "mode": "Roleplay · RPG",
+      "host": "c1.ketrix.cloud",
+      "port": 30320,
+      "queryPortOffset": 123
+    },
+    {
+      "id": 2,
+      "label": "02",
+      "name": "Західна Україна",
+      "mode": "Roleplay · RPG",
+      "host": "127.0.0.1",
+      "port": 22004,
+      "queryPortOffset": 123,
+      "status": "closed",
+      "statusLabel": "Тимчасово закрито"
+    }
+  ],
+  "game": {
+    "installDirName": "WINTER GTA",
+    "exeName": "WINTER GTA.exe",
+    "downloadUrl": "https://winter.nukshn.com/game.zip",
+    "mtaExeName": "Multi Theft Auto.exe",
+    "version": "2.0.0"
+  },
+  "discord": {
+    "clientId": "1535728677810343946"
+  }
+}

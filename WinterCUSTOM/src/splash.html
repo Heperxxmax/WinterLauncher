@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
+  <title>WINTER GTA</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: "Segoe UI", "Inter", Arial, sans-serif;
+    }
+
+    body {
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* Основной экран */
+    .splash {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      -webkit-app-region: drag;
+    }
+
+    /* Размытый фон */
+    .background {
+      position: absolute;
+      inset: -100px;
+      background:
+        radial-gradient(
+          circle at 50% 40%,
+          rgba(58, 168, 255, 0.18),
+          transparent 32%
+        ),
+        radial-gradient(
+          circle at 20% 90%,
+          rgba(0, 119, 255, 0.10),
+          transparent 35%
+        ),
+        radial-gradient(
+          circle at 90% 10%,
+          rgba(78, 180, 255, 0.08),
+          transparent 30%
+        );
+      filter: blur(20px);
+      animation: backgroundPulse 5s ease-in-out infinite;
+    }
+
+    @keyframes backgroundPulse {
+      0%, 100% {
+        transform: scale(1);
+        opacity: .8;
+      }
+
+      50% {
+        transform: scale(1.08);
+        opacity: 1;
+      }
+    }
+
+    /* Сетка */
+    .grid {
+      position: absolute;
+      inset: 0;
+      opacity: .12;
+      background-image:
+        linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+      background-size: 45px 45px;
+      mask-image: radial-gradient(circle, black 10%, transparent 75%);
+      -webkit-mask-image: radial-gradient(circle, black 10%, transparent 75%);
+    }
+
+    /* Светящийся круг */
+    .glow {
+      position: absolute;
+      width: 230px;
+      height: 230px;
+      border-radius: 50%;
+      background: rgba(58, 168, 255, 0.14);
+      filter: blur(65px);
+      animation: glowPulse 3s ease-in-out infinite;
+    }
+
+    @keyframes glowPulse {
+      0%, 100% {
+        transform: scale(.9);
+        opacity: .55;
+      }
+
+      50% {
+        transform: scale(1.15);
+        opacity: .9;
+      }
+    }
+
+    /* Контент */
+    .splash-content {
+      position: relative;
+      z-index: 5;
+
+      width: 330px;
+      padding: 34px 38px 30px;
+
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+
+      background: rgba(8, 14, 24, 0.68);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+
+      box-shadow:
+        0 25px 80px rgba(0, 0, 0, .45),
+        inset 0 1px 0 rgba(255,255,255,.05);
+
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+
+      animation: contentAppear .8s cubic-bezier(.2,.8,.2,1);
+    }
+
+    @keyframes contentAppear {
+      from {
+        opacity: 0;
+        transform: translateY(15px) scale(.96);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    /* Логотип */
+    .logo-wrapper {
+      position: relative;
+      width: 108px;
+      height: 108px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 19px;
+    }
+
+    .logo-wrapper::before {
+      content: "";
+      position: absolute;
+      width: 95px;
+      height: 95px;
+      border-radius: 28px;
+
+      background: rgba(58, 168, 255, .08);
+      border: 1px solid rgba(58, 168, 255, .18);
+
+      box-shadow:
+        0 0 35px rgba(58, 168, 255, .20),
+        inset 0 0 25px rgba(58, 168, 255, .05);
+
+      animation: logoBox 3s ease-in-out infinite;
+    }
+
+    @keyframes logoBox {
+      0%, 100% {
+        transform: rotate(0deg) scale(1);
+      }
+
+      50% {
+        transform: rotate(2deg) scale(1.04);
+      }
+    }
+
+    .logo {
+      position: relative;
+      z-index: 2;
+
+      width: 76px;
+      height: 76px;
+      object-fit: contain;
+
+      filter:
+        drop-shadow(0 0 12px rgba(58, 168, 255, .55))
+        drop-shadow(0 0 35px rgba(58, 168, 255, .22));
+
+      animation: logoFloat 3s ease-in-out infinite;
+    }
+
+    @keyframes logoFloat {
+      0%, 100% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(-5px);
+      }
+    }
+
+    /* Название */
+    .title {
+      margin: 0;
+
+      color: #ffffff;
+
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 3px;
+
+      text-shadow:
+        0 0 20px rgba(255,255,255,.12);
+    }
+
+    .subtitle {
+      margin: 8px 0 25px;
+
+      color: rgba(215, 225, 238, .55);
+
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+    }
+
+    /* Статус */
+    .status {
+      width: 100%;
+
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      margin-bottom: 9px;
+
+      color: rgba(230, 238, 248, .55);
+
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .status-left {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+
+      background: #3aa8ff;
+
+      box-shadow:
+        0 0 8px #3aa8ff,
+        0 0 15px rgba(58, 168, 255, .5);
+
+      animation: dotPulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes dotPulse {
+      0%, 100% {
+        opacity: .45;
+      }
+
+      50% {
+        opacity: 1;
+      }
+    }
+
+    /* Загрузчик */
+    .loader-track {
+      position: relative;
+
+      width: 100%;
+      height: 4px;
+
+      overflow: hidden;
+
+      border-radius: 999px;
+
+      background: rgba(255,255,255,.07);
+      box-shadow: inset 0 0 4px rgba(0,0,0,.35);
+    }
+
+    .loader-fill {
+      position: absolute;
+      top: 0;
+      left: -45%;
+
+      width: 45%;
+      height: 100%;
+
+      border-radius: 999px;
+
+      background: linear-gradient(
+        90deg,
+        transparent,
+        #3aa8ff,
+        #8bd0ff,
+        transparent
+      );
+
+      box-shadow:
+        0 0 10px rgba(58,168,255,.9),
+        0 0 20px rgba(58,168,255,.35);
+
+      animation: loading 1.45s cubic-bezier(.4,0,.2,1) infinite;
+    }
+
+    @keyframes loading {
+      0% {
+        left: -45%;
+      }
+
+      100% {
+        left: 110%;
+      }
+    }
+
+    /* Нижняя надпись */
+    .version {
+      margin-top: 18px;
+
+      color: rgba(255,255,255,.25);
+
+      font-size: 9px;
+      letter-spacing: 1px;
+    }
+
+    /* Маленькие декоративные точки */
+    .particle {
+      position: absolute;
+
+      width: 2px;
+      height: 2px;
+
+      border-radius: 50%;
+
+      background: #72c5ff;
+      box-shadow: 0 0 8px #3aa8ff;
+
+      opacity: .35;
+
+      animation: particleMove 5s linear infinite;
+    }
+
+    .particle:nth-child(1) {
+      left: 15%;
+      bottom: -10px;
+      animation-delay: 0s;
+    }
+
+    .particle:nth-child(2) {
+      left: 30%;
+      bottom: -10px;
+      animation-delay: 1.5s;
+    }
+
+    .particle:nth-child(3) {
+      left: 70%;
+      bottom: -10px;
+      animation-delay: 2.5s;
+    }
+
+    .particle:nth-child(4) {
+      left: 85%;
+      bottom: -10px;
+      animation-delay: .8s;
+    }
+
+    @keyframes particleMove {
+      0% {
+        transform: translateY(0);
+        opacity: 0;
+      }
+
+      15% {
+        opacity: .35;
+      }
+
+      85% {
+        opacity: .2;
+      }
+
+      100% {
+        transform: translateY(-450px);
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="splash">
+
+    <div class="background"></div>
+    <div class="grid"></div>
+    <div class="glow"></div>
+
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+
+    <div class="splash-content">
+
+      <div class="logo-wrapper">
+        <img
+          class="logo"
+          src="assets/icon.png"
+          alt="WINTER GTA"
+        />
+      </div>
+
+      <h1 class="title">WINTER GTA</h1>
+
+      <div class="subtitle">
+        Game Launcher
+      </div>
+
+      <div class="status">
+        <div class="status-left">
+          <span class="status-dot"></span>
+          <span>Запуск лаунчера</span>
+        </div>
+
+        <span>...</span>
+      </div>
+
+      <div class="loader-track">
+        <div class="loader-fill"></div>
+      </div>
+
+      <div class="version">
+        WINTER GTA • LAUNCHER
+      </div>
+
+    </div>
+  </div>
+
+</body>
+</html>
