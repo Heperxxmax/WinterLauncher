@@ -57,17 +57,7 @@ async function setActivity(activity) {
   }
 }
 
-// Discord rate-limits presence updates to roughly one every 15 seconds and
-// silently drops the rest. The download loop reports progress several times a
-// second, so without this gate almost every call is wasted work — an await'd
-// IPC round-trip to the Discord client, thousands of times over a multi-GB
-// download. The final 100% always goes through so the presence never sticks
-// at a stale percentage.
-const RPC_MIN_INTERVAL_MS = 15000;
-let lastDownloadingAt = 0;
-
 function setIdle() {
-  lastDownloadingAt = 0;
   setActivity({
     details: 'У лаунчері',
     state: 'Обирає сервер',
@@ -77,9 +67,6 @@ function setIdle() {
 }
 
 function setDownloading(fraction) {
-  const now = Date.now();
-  if (fraction < 1 && now - lastDownloadingAt < RPC_MIN_INTERVAL_MS) return;
-  lastDownloadingAt = now;
   const pct = Math.round((fraction || 0) * 100);
   setActivity({
     details: 'Завантажує гру',
@@ -90,7 +77,6 @@ function setDownloading(fraction) {
 }
 
 function setPlaying(serverName) {
-  lastDownloadingAt = 0;
   setActivity({
     details: 'У грі',
     state: serverName || 'На сервері',

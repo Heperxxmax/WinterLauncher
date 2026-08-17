@@ -15,24 +15,15 @@
     selectedServerId: null,
     install: 'notInstalled', // notInstalled | downloading | installed | updateAvailable | running
     progress: 0,
-    activePanel: null, // null | 'settings' | 'servers'
+    activePanel: null, // null | 'settings'
+    sidebarOpen: false,
+    activeView: 'home', // 'home' | 'news'
     toggles: {},
     volume: 70,
   };
 
-  // ipcRenderer.invoke prefixes every rejection with
-  // "Error invoking remote method 'app:download-game': Error: ". That prefix
-  // was going straight onto the status line in front of players, burying the
-  // actual message inside launcher internals they can't do anything with.
-  function ipcMessage(err) {
-    return ((err && err.message) || '')
-      .replace(/^Error invoking remote method '[^']*':\s*/, '')
-      .replace(/^(?:Error|TypeError|RangeError):\s*/, '')
-      .trim();
-  }
-
   function friendlyDownloadError(err) {
-    const message = ipcMessage(err);
+    const message = (err && err.message) || '';
     if (/ENOSPC/.test(message)) return 'Недостатньо вільного місця на диску для встановлення гри. Звільніть місце або оберіть іншу теку в налаштуваннях.';
     if (/EPERM|EACCES/.test(message)) return 'Немає прав для запису у вибрану теку. Оберіть іншу теку в налаштуваннях або запустіть лаунчер від імені адміністратора.';
     return message || 'Помилка встановлення';
@@ -49,29 +40,6 @@
     if (!server || !server.online || server.players === null) return '— гравців';
     const max = server.maxPlayers !== null ? `/${server.maxPlayers}` : '';
     return `${server.players}${max} гравців`;
-  }
-
-  function fmtBytes(bytes) {
-    if (!bytes || bytes < 0) return '0 МБ';
-    const gb = bytes / 1024 ** 3;
-    if (gb >= 1) return `${gb.toFixed(1)} ГБ`;
-    return `${Math.round(bytes / 1024 ** 2)} МБ`;
-  }
-
-  function fmtSpeed(bytesPerSecond) {
-    if (!bytesPerSecond || bytesPerSecond <= 0) return '';
-    return `${(bytesPerSecond / 1024 ** 2).toFixed(1)} МБ/с`;
-  }
-
-  // Deliberately coarse: a to-the-second countdown on a 20-minute download
-  // just draws attention to how much it jitters.
-  function fmtEta(seconds) {
-    if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) return '';
-    if (seconds < 60) return 'менше хвилини';
-    const minutes = Math.round(seconds / 60);
-    if (minutes < 60) return `~${minutes} хв`;
-    const hours = Math.floor(minutes / 60);
-    return `~${hours} год ${minutes % 60} хв`;
   }
 
   function selectedServer() {
@@ -99,81 +67,38 @@
     }
   }
 
-  // ---------- Dock ----------
-  function pillMetaText(server) {
-    const ping = server.online && server.ping !== null ? ` · ${server.ping} ms` : '';
-    return `${fmtPlayers(server)}${ping}`;
-  }
-
-  // Called on every 15-second poll. Rebuilding the pills from innerHTML each
-  // time threw away and recreated live DOM nodes — which restarts their CSS
-  // transitions, drops hover state and re-runs layout for markup that is
-  // identical apart from two numbers. Build once, then patch only the text and
-  // colour that actually change.
-  function renderDock() {
-    const dock = el('dock-servers');
-    const existing = dock.querySelectorAll('.server-pill');
-    const sameShape = existing.length === state.servers.length;
-
-    if (sameShape) {
-      state.servers.forEach((server, index) => {
-        const pill = existing[index];
-        if (pill.dataset.serverId !== String(server.id)) return;
-        pill.querySelector('.pill-meta-dot').style.background = pingColor(server.ping);
-        pill.querySelector('.pill-meta-text').textContent = pillMetaText(server);
-      });
-      requestAnimationFrame(positionIndicator);
+  // ---------- Dock: current server chip ----------
+  function renderDockCurrent() {
+    const cur = selectedServer();
+    const dot = el('dock-current-dot');
+    const name = el('dock-current-name');
+    if (!cur) {
+      name.textContent = '—';
+      dot.style.background = '#7c8798';
       return;
     }
-
-    existing.forEach((node) => node.remove());
-
-    state.servers.forEach((server) => {
-      const closed = !!server.status;
-      const pill = document.createElement('button');
-      pill.className = 'server-pill' + (closed ? ' disabled' : '');
-      pill.dataset.serverId = String(server.id);
-      pill.innerHTML = `
-        <div class="pill-badge">${server.label ?? ''}</div>
-        <div class="pill-info">
-          <div class="pill-name">${server.name}</div>
-          <div class="pill-meta">
-            <span class="pill-meta-dot" style="background:${pingColor(server.ping)}"></span>
-            <span class="pill-meta-text">${pillMetaText(server)}</span>
-          </div>
-        </div>
-      `;
-      if (!closed) {
-        pill.addEventListener('click', () => {
-          WGSound.click();
-          selectServer(server.id);
-        });
-      }
-      dock.appendChild(pill);
-    });
-
-    requestAnimationFrame(positionIndicator);
-  }
-
-  function positionIndicator() {
-    const dock = el('dock-servers');
-    const indicator = el('dock-indicator');
-    const idx = state.servers.findIndex((s) => s.id === state.selectedServerId);
-    const pill = dock.querySelectorAll('.server-pill')[idx];
-    if (!pill) {
-      indicator.style.width = '0';
-      return;
-    }
-    indicator.style.width = `${pill.offsetWidth}px`;
-    indicator.style.transform = `translateX(${pill.offsetLeft}px)`;
+    name.textContent = cur.name;
+    dot.style.background = pingColor(cur.ping);
   }
 
   function selectServer(id) {
     state.selectedServerId = id;
     window.api.saveSelectedServer(id);
-    renderDock();
+    renderDockCurrent();
     renderNowPlaying();
-    if (state.activePanel === 'servers') renderServersPanel();
+    renderSidebarServers();
+  }
+
+  // ---------- Sidebar (servers, left, collapsible) ----------
+  function setSidebarOpen(open) {
+    state.sidebarOpen = open;
+    el('servers-sidebar').classList.toggle('open', open);
+    el('sidebar-toggle').classList.toggle('open', open);
+  }
+
+  function toggleSidebar() {
+    WGSound.click();
+    setSidebarOpen(!state.sidebarOpen);
   }
 
   function renderNowPlaying() {
@@ -185,19 +110,47 @@
     }
   }
 
-  // ---------- Hero / news ----------
+  // ---------- Hero (home tab) ----------
   function renderHero() {
     const news = (state.config.news || [])[0];
     if (!news) return;
     el('hero-date').textContent = `${news.date || ''} · НОВИНИ ПРОЄКТУ`;
     el('hero-title').textContent = (news.title || '').toUpperCase();
     el('hero-subtitle').textContent = news.subtitle || '';
-    const hero = document.querySelector('.hero');
+    const hero = el('view-home');
     if (news.image) {
       hero.style.backgroundImage = `url("${news.image}")`;
       hero.style.backgroundSize = 'cover';
       hero.style.backgroundPosition = 'center';
     }
+  }
+
+  // ---------- News (separate tab) ----------
+  function renderNewsList() {
+    const list = el('news-list');
+    const items = state.config.news || [];
+    list.innerHTML = '';
+    if (!items.length) {
+      list.innerHTML = '<div class="news-empty">Новин поки немає.</div>';
+      return;
+    }
+    items.forEach((news) => {
+      const card = document.createElement('div');
+      card.className = 'news-card';
+      card.innerHTML = `
+        ${news.image ? `<div class="news-card-cover" style="background-image:url('${news.image}')"></div>` : ''}
+        <div class="news-card-date">${news.date || ''}</div>
+        <div class="news-card-title">${(news.title || '').toUpperCase()}</div>
+        <div class="news-card-subtitle">${news.subtitle || ''}</div>
+      `;
+      list.appendChild(card);
+    });
+  }
+
+  function setActiveView(name) {
+    state.activeView = name;
+    el('view-home').classList.toggle('hidden', name !== 'home');
+    el('view-news').classList.toggle('hidden', name !== 'news');
   }
 
   // ---------- Action / dock status ----------
@@ -220,23 +173,13 @@
     const reinstallRow = el('reinstall-row');
     reinstallRow.style.display = (state.install === 'installed' || state.install === 'updateAvailable') ? '' : 'none';
 
-    // Integrity checking is manifest-only — without one there are no per-file
-    // hashes to compare against, so the button would do nothing but raise an
-    // error. Hide it rather than let players find it and get told "no".
-    const verifyButton = el('btn-verify');
-    if (verifyButton) {
-      const hasManifest = !!(state.config && state.config.game && state.config.game.manifestUrl);
-      verifyButton.style.display = hasManifest ? '' : 'none';
-    }
-
     if (state.install === 'downloading') {
       const pct = Math.round(state.progress * 100);
       area.innerHTML = `
         <div class="progress-wrap">
           <div class="progress-info">
-            <div class="progress-head"><span id="progress-label">Завантаження та встановлення…</span><span class="pct">${pct}%</span></div>
+            <div class="progress-head"><span>Завантаження та встановлення…</span><span class="pct">${pct}%</span></div>
             <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:${pct}%"></div></div>
-            <div class="progress-sub" id="progress-sub"></div>
           </div>
           <button class="cancel-btn" id="btn-cancel" title="Скасувати">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -294,7 +237,7 @@
         renderNowPlaying();
       } catch (err) {
         WGSound.error();
-        el('status-text').textContent = ipcMessage(err) || 'Помилка запуску';
+        el('status-text').textContent = err.message || 'Помилка запуску';
       }
     }
   }
@@ -338,35 +281,6 @@
     await startDownload();
   }
 
-  // Cheap alternative to "перевстановити гру" for a broken install: re-hash
-  // every file against the manifest and report what is wrong, without deleting
-  // anything or re-downloading gigabytes.
-  async function verifyGame() {
-    const status = el('verify-status');
-    const button = el('btn-verify');
-    WGSound.click();
-    button.disabled = true;
-    status.textContent = 'Перевіряємо файли гри...';
-
-    try {
-      const report = await window.api.verifyGame();
-      if (report.ok) {
-        status.textContent = `Усе гаразд: перевірено ${report.okCount} файлів.`;
-      } else {
-        const parts = [];
-        if (report.missing) parts.push(`відсутніх: ${report.missing}`);
-        if (report.changed) parts.push(`пошкоджених: ${report.changed}`);
-        status.textContent =
-          `Знайдено проблеми (${parts.join(', ')}). Натисніть «ОНОВИТИ», щоб відновити ці файли.`;
-      }
-    } catch (err) {
-      WGSound.error();
-      status.textContent = ipcMessage(err) || 'Не вдалося перевірити файли.';
-    } finally {
-      button.disabled = false;
-    }
-  }
-
   // ---------- Settings panel ----------
   function renderTogglesList() {
     const list = el('toggles-list');
@@ -397,10 +311,6 @@
   function openPanel(name) {
     WGSound.open();
     state.activePanel = name;
-    if (name === 'servers') {
-      renderServersPanel();
-      refreshServers().catch(() => {});
-    }
     el(`${name}-panel`).classList.remove('hidden');
     requestAnimationFrame(() => el(`${name}-panel`).classList.add('visible'));
   }
@@ -414,9 +324,9 @@
     state.activePanel = null;
   }
 
-  // ---------- Servers panel ----------
-  function renderServersPanel() {
-    const list = el('servers-list');
+  // ---------- Servers sidebar list ----------
+  function renderSidebarServers() {
+    const list = el('sidebar-servers-list');
     list.innerHTML = '';
     state.servers.forEach((server) => {
       const closed = !!server.status;
@@ -517,9 +427,9 @@
   async function refreshServers() {
     const servers = await window.api.queryServers();
     state.servers = servers;
-    renderDock();
+    renderDockCurrent();
     renderNowPlaying();
-    if (state.activePanel === 'servers') renderServersPanel();
+    renderSidebarServers();
   }
 
   function startServerPolling() {
@@ -530,7 +440,7 @@
 
   // ---------- Nav ----------
   function setActiveNav(id) {
-    ['nav-home', 'nav-news', 'nav-servers'].forEach((n) => el(n).classList.toggle('active', n === id));
+    ['nav-home', 'nav-news'].forEach((n) => el(n).classList.toggle('active', n === id));
   }
 
   function wireStaticUi() {
@@ -544,13 +454,7 @@
     });
     el('btn-settings').addEventListener('click', () => openPanel('settings'));
     el('btn-close-settings').addEventListener('click', closePanel);
-    el('btn-close-servers').addEventListener('click', closePanel);
     el('btn-reinstall').addEventListener('click', reinstallGame);
-    el('btn-verify').addEventListener('click', verifyGame);
-    el('btn-open-logs').addEventListener('click', () => {
-      WGSound.click();
-      window.api.openLogs();
-    });
     el('btn-change-path').addEventListener('click', changeInstallPath);
     el('btn-check-update').addEventListener('click', checkLauncherUpdate);
     el('btn-modal-browse').addEventListener('click', async () => {
@@ -570,19 +474,32 @@
       WGSound.click();
       closePanel();
       setActiveNav('nav-home');
+      setActiveView('home');
     });
     el('nav-news').addEventListener('click', () => {
       WGSound.click();
       closePanel();
       setActiveNav('nav-news');
+      setActiveView('news');
     });
-    el('nav-site').addEventListener('click', () => {
+
+    el('link-site').addEventListener('click', () => {
       WGSound.click();
       window.api.openExternal(state.config.siteUrl);
     });
-    el('nav-servers').addEventListener('click', () => {
-      openPanel('servers');
-      setActiveNav('nav-servers');
+    el('link-forum').addEventListener('click', () => {
+      WGSound.click();
+      window.api.openExternal(state.config.forumUrl);
+    });
+    el('link-discord').addEventListener('click', () => {
+      WGSound.click();
+      window.api.openExternal(state.config.discordUrl);
+    });
+
+    el('sidebar-toggle').addEventListener('click', toggleSidebar);
+    el('dock-current').addEventListener('click', () => {
+      if (!state.sidebarOpen) WGSound.click();
+      setSidebarOpen(true);
     });
 
     let volumeSaveTimer = null;
@@ -599,72 +516,21 @@
     el('volume-slider').addEventListener('change', () => WGSound.click());
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closePanel();
+      if (e.key === 'Escape') {
+        closePanel();
+        setSidebarOpen(false);
+      }
     });
 
-    window.addEventListener('resize', () => positionIndicator());
-
-    window.api.onDownloadProgress((payload) => {
-      const { phase, fraction } = payload;
-
-      // Kept in state as well as pushed to the DOM: renderAction() rebuilds the
-      // progress markup from state.progress whenever the action area re-renders.
-      const setProgress = (value) => {
-        state.progress = value;
-        const pct = Math.round(value * 100);
+    window.api.onDownloadProgress(({ phase, fraction }) => {
+      if (phase === 'downloading') {
+        state.progress = fraction;
         const fill = el('progress-fill');
         const pctEl = document.querySelector('.progress-head .pct');
-        if (fill) fill.style.width = `${pct}%`;
-        if (pctEl) pctEl.textContent = `${pct}%`;
-      };
-
-      const setLabel = (text) => {
-        const label = el('progress-label');
-        if (label) label.textContent = text;
-      };
-      const setSub = (text) => {
-        const sub = el('progress-sub');
-        if (sub) sub.textContent = text;
-      };
-
-      if (phase === 'downloading') {
-        setProgress(fraction);
-        setLabel('Завантаження…');
-        // The whole point of the sub-line: a 20-minute transfer with only a
-        // percentage looks stuck, while "5.2 МБ/с · лишилось ~12 хв" reads as
-        // obviously alive.
-        const speed = fmtSpeed(payload.bytesPerSecond);
-        const eta = fmtEta(payload.secondsLeft);
-        const size = payload.total
-          ? `${fmtBytes(payload.received)} з ${fmtBytes(payload.total)}`
-          : '';
-        setSub([size, speed, eta && `лишилось ${eta}`].filter(Boolean).join(' · '));
-        // Clears a leftover "retrying" message once bytes start flowing again.
-        el('status-text').textContent = 'Завантаження та встановлення';
-      } else if (phase === 'retrying') {
-        const seconds = Math.max(1, Math.round((payload.delayMs || 0) / 1000));
-        const message = `З'єднання втрачено. Повтор ${payload.attempt}/${payload.retries} через ${seconds} с...`;
-        el('status-text').textContent = message;
-        setSub(message);
-      } else if (phase === 'checking') {
-        setProgress(fraction || 0);
-        setLabel('Перевірка файлів гри…');
-        setSub(payload.file || '');
-        el('status-text').textContent = 'Перевірка файлів';
-      } else if (phase === 'verifying') {
-        setProgress(fraction || 0);
-        setLabel('Перевірка архіву…');
-        setSub('');
-        el('status-text').textContent = 'Перевірка архіву';
+        if (fill) fill.style.width = `${Math.round(fraction * 100)}%`;
+        if (pctEl) pctEl.textContent = `${Math.round(fraction * 100)}%`;
       } else if (phase === 'installing') {
-        // Unpacking restarts the bar from 0 — it is a second long phase, not a
-        // continuation of the download.
-        setProgress(fraction || 0);
-        setLabel('Встановлення…');
-        setSub('');
-        el('status-text').textContent = fraction
-          ? `Встановлення... ${Math.round(fraction * 100)}%`
-          : 'Встановлення...';
+        el('status-text').textContent = 'Встановлення...';
       } else if (phase === 'cancelled') {
         state.install = 'notInstalled';
         renderAction();
@@ -710,6 +576,7 @@
     el('launcher-version-value').textContent = `версія ${await window.api.getLauncherVersion()}`;
     renderTogglesList();
     renderHero();
+    renderNewsList();
     wireStaticUi();
     wireLauncherUpdate();
 
@@ -718,7 +585,8 @@
     }
 
     state.servers = await window.api.queryServers();
-    renderDock();
+    renderDockCurrent();
+    renderSidebarServers();
     await refreshInstallState();
     startServerPolling();
   }

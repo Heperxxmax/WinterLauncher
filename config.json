@@ -8,8 +8,8 @@
   "news": [
     {
       "date": "09.07.2026",
-      "title": "Новий лаунчер",
-      "subtitle": "Оновлений дизайн і більш стабільне встановлення та оновлення гри.",
+      "title": "WINTER 4.0",
+      "subtitle": "Наша команда старалась над 4.0 и мы ето зеделали!",
       "image": ""
     }
   ],
@@ -19,7 +19,7 @@
       "label": "01",
       "name": "Центральна Україна",
       "mode": "Roleplay · RPG",
-      "host": "g1.ketrix.cloud",
+      "host": "c1.ketrix.cloud",
       "port": 30320,
       "queryPortOffset": 123
     },
@@ -28,8 +28,8 @@
       "label": "02",
       "name": "Західна Україна",
       "mode": "Roleplay · RPG",
-      "host": "g1.ketrix.cloud",
-      "port": 30334,
+      "host": "127.0.0.1",
+      "port": 22004,
       "queryPortOffset": 123,
       "status": "closed",
       "statusLabel": "Тимчасово закрито"
@@ -40,9 +40,9 @@
     "exeName": "WINTER GTA.exe",
     "downloadUrl": "https://winter.nukshn.com/game.zip",
     "mtaExeName": "Multi Theft Auto.exe",
-    "version": "1.0.1"
+    "version": "2.0.0"
   },
   "discord": {
-    "clientId": "1515705573998460958"
+    "clientId": "1535728677810343946"
   }
 }
