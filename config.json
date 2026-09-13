@@ -1,15 +1,15 @@
 {
-  "launcherTitle": "WINTER GTA",
-  "siteUrl": "https://winterua.qniks.me",
-  "forumUrl": "https://forum-winter-gta.qniks.me",
-  "discordUrl": "https://discord.gg/An4Mcy5W3U",
-  "telegramUrl": "https://t.me/example",
+  "launcherTitle": "UKRAINE ONLINE",
+  "siteUrl": "https://discord.com/invite/cYBa9m98VB",
+  "forumUrl": "https://discord.com/invite/cYBa9m98VB",
+  "discordUrl": "https://discord.com/invite/cYBa9m98VB",
+  "telegramUrl": "https://discord.com/invite/cYBa9m98VB",
   "newsUrl": "",
   "news": [
     {
-      "date": "09.07.2026",
-      "title": "WINTER 4.0",
-      "subtitle": "Наша команда старалась над 4.0 и мы ето зеделали!",
+      "date": "11.09.2026",
+      "title": "UKRAINE ONLINE 4.1",
+      "subtitle": "Наша команда працювала над 4.1 — і ми це зробили!",
       "image": ""
     }
   ],
@@ -19,7 +19,7 @@
       "label": "01",
       "name": "Центральна Україна",
       "mode": "Roleplay · RPG",
-      "host": "c1.ketrix.cloud",
+      "host": "g1.ketrix.cloud",
       "port": 30320,
       "queryPortOffset": 123
     },
@@ -36,13 +36,14 @@
     }
   ],
   "game": {
-    "installDirName": "WINTER GTA",
-    "exeName": "WINTER GTA.exe",
-    "downloadUrl": "https://winter.nukshn.com/game.zip",
+    "installDirName": "UKRAINE ONLINE",
+    "exeName": "UKRAINE ONLINE.exe",
+    "downloadUrl": "https://drive.usercontent.google.com/download?id=1u_Wp85OijKZCYxGdGLjMePeQ4OVgFyY2&export=download&authuser=0&confirm=t&uuid=9f4dee62-0f89-4a7f-87e1-bd541330f310&at=AMrWOn3OWFkjCTz_Kwhvy9eEDnII%3A1789218834429",
+    "archiveType": "zip",
     "mtaExeName": "Multi Theft Auto.exe",
-    "version": "2.0.0"
+    "version": "1.1.0"
   },
   "discord": {
-    "clientId": "1535728677810343946"
+    "clientId": "1546116616134197379"
   }
 }

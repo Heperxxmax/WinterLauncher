@@ -62,7 +62,7 @@ function setIdle() {
     details: 'У лаунчері',
     state: 'Обирає сервер',
     largeImageKey: 'launcher_logo',
-    largeImageText: 'WINTER GTA',
+    largeImageText: 'UKRAINE ONLINE',
   });
 }
 
@@ -72,7 +72,7 @@ function setDownloading(fraction) {
     details: 'Завантажує гру',
     state: `${pct}%`,
     largeImageKey: 'launcher_logo',
-    largeImageText: 'WINTER GTA',
+    largeImageText: 'UKRAINE ONLINE',
   });
 }
 
@@ -81,7 +81,7 @@ function setPlaying(serverName) {
     details: 'У грі',
     state: serverName || 'На сервері',
     largeImageKey: 'launcher_logo',
-    largeImageText: 'WINTER GTA',
+    largeImageText: 'UKRAINE ONLINE',
   });
 }
 
