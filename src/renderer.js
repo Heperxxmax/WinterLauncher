@@ -15,7 +15,9 @@
     selectedServerId: null,
     install: 'notInstalled', // notInstalled | downloading | installed | updateAvailable | running
     progress: 0,
-    activePanel: null, // null | 'settings' | 'servers' | 'news'
+    activePanel: null, // null | 'settings'
+    sidebarOpen: false,
+    activeView: 'home', // 'home' | 'news'
     toggles: {},
     volume: 70,
   };
@@ -44,78 +46,38 @@
     return state.servers.find((s) => s.id === state.selectedServerId) || state.servers[0] || null;
   }
 
-  // ---------- Snowfall ----------
-  function spawnSnow() {
-    const layer = el('snowfall');
-    const count = 14;
-    for (let i = 0; i < count; i++) {
-      const flake = document.createElement('span');
-      const size = 2.5 + Math.random() * 2.5;
-      const left = Math.random() * 100;
-      const duration = 8 + Math.random() * 6;
-      const delay = -Math.random() * duration;
-      const opacity = 0.4 + Math.random() * 0.4;
-      flake.style.left = `${left}%`;
-      flake.style.width = `${size}px`;
-      flake.style.height = `${size}px`;
-      flake.style.opacity = opacity;
-      flake.style.animationDuration = `${duration}s`;
-      flake.style.animationDelay = `${delay}s`;
-      layer.appendChild(flake);
-    }
-  }
-
-  // ---------- Dock ----------
-  function renderDock() {
-    const dock = el('dock-servers');
-    const indicator = el('dock-indicator');
-    dock.querySelectorAll('.server-pill').forEach((n) => n.remove());
-
-    state.servers.forEach((server) => {
-      const closed = !!server.status;
-      const pill = document.createElement('button');
-      pill.className = 'server-pill' + (closed ? ' disabled' : '');
-      pill.innerHTML = `
-        <div class="pill-badge">${server.label ?? ''}</div>
-        <div class="pill-info">
-          <div class="pill-name">${server.name}</div>
-          <div class="pill-meta">
-            <span class="pill-meta-dot" style="background:${pingColor(server.ping)}"></span>
-            <span class="pill-meta-text">${fmtPlayers(server)}${server.online && server.ping !== null ? ' · ' + server.ping + ' ms' : ''}</span>
-          </div>
-        </div>
-      `;
-      if (!closed) {
-        pill.addEventListener('click', () => {
-          WGSound.click();
-          selectServer(server.id);
-        });
-      }
-      dock.appendChild(pill);
-    });
-
-    requestAnimationFrame(positionIndicator);
-  }
-
-  function positionIndicator() {
-    const dock = el('dock-servers');
-    const indicator = el('dock-indicator');
-    const idx = state.servers.findIndex((s) => s.id === state.selectedServerId);
-    const pill = dock.querySelectorAll('.server-pill')[idx];
-    if (!pill) {
-      indicator.style.width = '0';
+  // ---------- Dock: current server chip ----------
+  function renderDockCurrent() {
+    const cur = selectedServer();
+    const dot = el('dock-current-dot');
+    const name = el('dock-current-name');
+    if (!cur) {
+      name.textContent = '—';
+      dot.style.background = '#7c8798';
       return;
     }
-    indicator.style.width = `${pill.offsetWidth}px`;
-    indicator.style.transform = `translateX(${pill.offsetLeft}px)`;
+    name.textContent = cur.name;
+    dot.style.background = pingColor(cur.ping);
   }
 
   function selectServer(id) {
     state.selectedServerId = id;
     window.api.saveSelectedServer(id);
-    renderDock();
+    renderDockCurrent();
     renderNowPlaying();
-    if (state.activePanel === 'servers') renderServersPanel();
+    renderSidebarServers();
+  }
+
+  // ---------- Sidebar (servers, left, collapsible) ----------
+  function setSidebarOpen(open) {
+    state.sidebarOpen = open;
+    el('servers-sidebar').classList.toggle('open', open);
+    el('sidebar-toggle').classList.toggle('open', open);
+  }
+
+  function toggleSidebar() {
+    WGSound.click();
+    setSidebarOpen(!state.sidebarOpen);
   }
 
   function renderNowPlaying() {
@@ -127,19 +89,70 @@
     }
   }
 
-  // ---------- Hero / news ----------
+  // ---------- Hero (home tab) ----------
   function renderHero() {
     const news = (state.config.news || [])[0];
-    if (!news) return;
-    el('hero-date').textContent = `${news.date || ''} · НОВИНИ ПРОЄКТУ`;
-    el('hero-title').textContent = (news.title || '').toUpperCase();
-    el('hero-subtitle').textContent = news.subtitle || '';
-    const hero = document.querySelector('.hero');
-    if (news.image) {
-      hero.style.backgroundImage = `url("${news.image}")`;
-      hero.style.backgroundSize = 'cover';
-      hero.style.backgroundPosition = 'center';
+    if (news) {
+      el('hero-date').textContent = `${news.date || ''} · НОВИНИ ПРОЄКТУ`;
+      el('hero-title').textContent = (news.title || '').toUpperCase();
+      el('hero-subtitle').textContent = news.subtitle || '';
+      const hero = el('view-home');
+      if (news.image) {
+        hero.style.backgroundImage = `url("${news.image}")`;
+        hero.style.backgroundSize = 'cover';
+        hero.style.backgroundPosition = 'center';
+      }
     }
+  }
+
+
+  // ---------- News (separate tab) ----------
+  function renderNewsList() {
+    const list = el('news-list');
+    const items = state.config.news || [];
+    list.innerHTML = '';
+    if (!items.length) {
+      list.innerHTML = '<div class="news-empty">Новин поки немає.</div>';
+      return;
+    }
+    items.forEach((news) => {
+      const card = document.createElement('div');
+      card.className = 'news-card';
+      card.innerHTML = `
+        ${news.image ? `<div class="news-card-cover" style="background-image:url('${news.image}')"></div>` : ''}
+        <div class="news-card-date">${news.date || ''}</div>
+        <div class="news-card-title">${(news.title || '').toUpperCase()}</div>
+        <div class="news-card-subtitle">${news.subtitle || ''}</div>
+        <button class="news-read-btn" type="button">${news.button || 'Відкрити статтю'}</button>
+      `;
+      card.querySelector('.news-read-btn').addEventListener('click', () => openArticle(news));
+      list.appendChild(card);
+    });
+  }
+
+
+  function openArticle(news) {
+    WGSound.open();
+    el('article-date').textContent = news.date || '';
+    el('article-title').textContent = news.title || '';
+    const body = el('article-body');
+    const paragraphs = Array.isArray(news.body) && news.body.length
+      ? news.body
+      : [news.subtitle || 'Деталі цієї новини будуть додані найближчим часом.'];
+    body.innerHTML = paragraphs.map((text) => `<p>${text}</p>`).join('');
+    el('article-overlay').classList.remove('hidden');
+  }
+
+  function closeArticle() {
+    if (el('article-overlay').classList.contains('hidden')) return;
+    WGSound.close();
+    el('article-overlay').classList.add('hidden');
+  }
+
+  function setActiveView(name) {
+    state.activeView = name;
+    el('view-home').classList.toggle('hidden', name !== 'home');
+    el('view-news').classList.toggle('hidden', name !== 'news');
   }
 
   // ---------- Action / dock status ----------
@@ -300,11 +313,6 @@
   function openPanel(name) {
     WGSound.open();
     state.activePanel = name;
-    if (name === 'servers') {
-      renderServersPanel();
-      refreshServers().catch(() => {});
-    }
-    if (name === 'news') renderNewsPanel();
     el(`${name}-panel`).classList.remove('hidden');
     requestAnimationFrame(() => el(`${name}-panel`).classList.add('visible'));
   }
@@ -318,9 +326,9 @@
     state.activePanel = null;
   }
 
-  // ---------- Servers panel ----------
-  function renderServersPanel() {
-    const list = el('servers-list');
+  // ---------- Servers sidebar list ----------
+  function renderSidebarServers() {
+    const list = el('sidebar-servers-list');
     list.innerHTML = '';
     state.servers.forEach((server) => {
       const closed = !!server.status;
@@ -354,40 +362,6 @@
           selectServer(server.id);
         });
       }
-      list.appendChild(card);
-    });
-  }
-
-  // ---------- News panel ----------
-  function renderNewsPanel() {
-    const list = el('news-list');
-    list.innerHTML = '';
-    const newsItems = state.config.news || [];
-
-    if (!newsItems.length) {
-      const empty = document.createElement('div');
-      empty.className = 'news-empty';
-      empty.textContent = 'Новин поки немає.';
-      list.appendChild(empty);
-      return;
-    }
-
-    newsItems.forEach((news) => {
-      const card = document.createElement('article');
-      card.className = 'news-card';
-      if (news.image) card.style.backgroundImage = `linear-gradient(90deg, rgba(8, 15, 28, 0.94), rgba(8, 15, 28, 0.72)), url("${news.image}")`;
-
-      const date = document.createElement('div');
-      date.className = 'news-card-date';
-      date.textContent = news.date || 'НОВИНИ ПРОЄКТУ';
-      const title = document.createElement('h2');
-      title.className = 'news-card-title';
-      title.textContent = news.title || 'Новина';
-      const subtitle = document.createElement('p');
-      subtitle.className = 'news-card-subtitle';
-      subtitle.textContent = news.subtitle || '';
-
-      card.append(date, title, subtitle);
       list.appendChild(card);
     });
   }
@@ -455,9 +429,9 @@
   async function refreshServers() {
     const servers = await window.api.queryServers();
     state.servers = servers;
-    renderDock();
+    renderDockCurrent();
     renderNowPlaying();
-    if (state.activePanel === 'servers') renderServersPanel();
+    renderSidebarServers();
   }
 
   function startServerPolling() {
@@ -468,7 +442,7 @@
 
   // ---------- Nav ----------
   function setActiveNav(id) {
-    ['nav-home', 'nav-news', 'nav-servers'].forEach((n) => el(n).classList.toggle('active', n === id));
+    ['nav-home', 'nav-news'].forEach((n) => el(n).classList.toggle('active', n === id));
   }
 
   function wireStaticUi() {
@@ -482,8 +456,6 @@
     });
     el('btn-settings').addEventListener('click', () => openPanel('settings'));
     el('btn-close-settings').addEventListener('click', closePanel);
-    el('btn-close-servers').addEventListener('click', closePanel);
-    el('btn-close-news').addEventListener('click', closePanel);
     el('btn-reinstall').addEventListener('click', reinstallGame);
     el('btn-change-path').addEventListener('click', changeInstallPath);
     el('btn-check-update').addEventListener('click', checkLauncherUpdate);
@@ -504,19 +476,35 @@
       WGSound.click();
       closePanel();
       setActiveNav('nav-home');
+      setActiveView('home');
     });
     el('nav-news').addEventListener('click', () => {
+      WGSound.click();
       closePanel();
-      openPanel('news');
       setActiveNav('nav-news');
+      setActiveView('news');
     });
-    el('nav-site').addEventListener('click', () => {
+    el('article-close').addEventListener('click', closeArticle);
+    el('article-overlay').addEventListener('click', (e) => {
+      if (e.target === el('article-overlay')) closeArticle();
+    });
+
+    el('link-site').addEventListener('click', () => {
       WGSound.click();
       window.api.openExternal(state.config.siteUrl);
     });
-    el('nav-servers').addEventListener('click', () => {
-      openPanel('servers');
-      setActiveNav('nav-servers');
+    el('link-forum').addEventListener('click', () => {
+      WGSound.click();
+    });
+    el('link-discord').addEventListener('click', () => {
+      WGSound.click();
+      window.api.openExternal(state.config.discordUrl);
+    });
+
+    el('sidebar-toggle').addEventListener('click', toggleSidebar);
+    el('dock-current').addEventListener('click', () => {
+      if (!state.sidebarOpen) WGSound.click();
+      setSidebarOpen(true);
     });
 
     let volumeSaveTimer = null;
@@ -533,10 +521,11 @@
     el('volume-slider').addEventListener('change', () => WGSound.click());
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closePanel();
+      if (e.key === 'Escape') {
+        closePanel();
+        setSidebarOpen(false);
+      }
     });
-
-    window.addEventListener('resize', () => positionIndicator());
 
     window.api.onDownloadProgress(({ phase, fraction }) => {
       if (phase === 'downloading') {
@@ -574,9 +563,7 @@
   }
 
   async function init() {
-    spawnSnow();
-
-    const { config, settings, version } = await window.api.getConfig();
+const { config, settings, version } = await window.api.getConfig();
     state.config = config;
     state.settings = settings;
     state.toggles = { ...settings.toggles };
@@ -592,6 +579,7 @@
     el('launcher-version-value').textContent = `версія ${await window.api.getLauncherVersion()}`;
     renderTogglesList();
     renderHero();
+    renderNewsList();
     wireStaticUi();
     wireLauncherUpdate();
 
@@ -600,7 +588,8 @@
     }
 
     state.servers = await window.api.queryServers();
-    renderDock();
+    renderDockCurrent();
+    renderSidebarServers();
     await refreshInstallState();
     startServerPolling();
   }

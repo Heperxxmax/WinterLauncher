@@ -1,15 +1,23 @@
 {
-  "launcherTitle": "UKRAINE ONLINE",
-  "siteUrl": "https://discord.com/invite/cYBa9m98VB",
-  "forumUrl": "https://discord.com/invite/cYBa9m98VB",
-  "discordUrl": "https://discord.com/invite/cYBa9m98VB",
-  "telegramUrl": "https://discord.com/invite/cYBa9m98VB",
+  "launcherTitle": "UO TEAM",
+  "siteUrl": "https://ukraineonline.qniks.me",
+  "forumUrl": "",
+  "discordUrl": "https://discord.gg/cMxprWTJZf",
+  "telegramUrl": "https://t.me/example",
   "newsUrl": "",
   "news": [
     {
-      "date": "11.09.2026",
-      "title": "UKRAINE ONLINE 4.1",
-      "subtitle": "Наша команда працювала над 4.1 — і ми це зробили!",
+      "date": "26.09.2026",
+      "title": "НОВИЙ ЛАУНЧЕР — ВЕРСІЯ 2.0",
+      "subtitle": "Ми старались зробити новий лаунчер швидшим, зручнішим та приємнішим у використанні. Гра — версія 4.1.",
+      "body": [
+        "Ми випустили нову версію лаунчера — 2.0.",
+        "Повністю оновили інтерфейс, зробили навігацію зрозумілішою та додали більш помітні кнопки для основних розділів.",
+        "Також оновили оформлення, ефекти та загальну плавність роботи лаунчера.",
+        "Гра UKRAINE ONLINE тепер має версію 4.1.",
+        "Дякуємо кожному, хто користується UKRAINE ONLINE та допомагає нам розвивати проєкт. Попереду ще більше оновлень!"
+      ],
+      "button": "Відкрити статтю",
       "image": ""
     }
   ],
@@ -19,7 +27,7 @@
       "label": "01",
       "name": "Центральна Україна",
       "mode": "Roleplay · RPG",
-      "host": "g1.ketrix.cloud",
+      "host": "c1.ketrix.cloud",
       "port": 30320,
       "queryPortOffset": 123
     },
@@ -37,13 +45,12 @@
   ],
   "game": {
     "installDirName": "UKRAINE ONLINE",
-    "exeName": "UKRAINE ONLINE.exe",
-    "downloadUrl": "https://pub-9443689d7eda4d9bb7e80e8885729852.r2.dev/game.zip",
-    "archiveType": "zip",
+    "exeName": "WINTER GTA.exe",
+    "downloadUrl": "https://winter.nukshn.com/game.zip",
     "mtaExeName": "Multi Theft Auto.exe",
-    "version": "1.1.0"
+    "version": "4.1.0"
   },
   "discord": {
-    "clientId": "1546116616134197379"
+    "clientId": "1535728677810343946"
   }
 }

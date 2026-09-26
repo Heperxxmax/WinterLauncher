@@ -33,51 +33,6 @@ function moveDirSync(src, dest) {
   }
 }
 
-// `extract-zip` otherwise exposes a low-level "end of central directory"
-// error when a hosting service returns an HTML error/confirmation page, or a
-// transfer is truncated without a Content-Length header. Check the ZIP's
-// opening signature and its end-of-central-directory record before extraction
-// so the player gets an actionable error instead.
-function assertCompleteZip(filePath) {
-  const size = fs.statSync(filePath).size;
-  const minimumZipSize = 22; // Empty ZIP: EOCD record only.
-
-  if (size < minimumZipSize) {
-    throw new Error('Завантажений файл не є повним ZIP-архівом. Оновіть посилання на гру та спробуйте ще раз.');
-  }
-
-  const fd = fs.openSync(filePath, 'r');
-  try {
-    const header = Buffer.alloc(4);
-    fs.readSync(fd, header, 0, header.length, 0);
-    const signature = header.toString('binary');
-    if (!['PK\x03\x04', 'PK\x05\x06', 'PK\x07\x08'].includes(signature)) {
-      throw new Error('Сервер повернув не ZIP-архів. Перевірте пряме посилання на файл гри в config.json.');
-    }
-
-    // The ZIP comment is limited to 65,535 bytes, so the EOCD record must be
-    // in this final window. Its comment length must end exactly at EOF.
-    const tailSize = Math.min(size, 0xffff + minimumZipSize);
-    const tail = Buffer.alloc(tailSize);
-    fs.readSync(fd, tail, 0, tailSize, size - tailSize);
-    let foundEocd = false;
-    for (let offset = tail.length - minimumZipSize; offset >= 0; offset -= 1) {
-      if (
-        tail.readUInt32LE(offset) === 0x06054b50 &&
-        offset + minimumZipSize + tail.readUInt16LE(offset + 20) === tail.length
-      ) {
-        foundEocd = true;
-        break;
-      }
-    }
-    if (!foundEocd) {
-      throw new Error('ZIP-архів завантажено не повністю. Спробуйте ще раз або оновіть посилання на файл гри.');
-    }
-  } finally {
-    fs.closeSync(fd);
-  }
-}
-
 // Free space on the drive holding `targetPath`, in bytes. Returns null if it
 // can't be determined (older Node/OS quirk) so callers can skip the check
 // rather than block the install on an unrelated failure.
@@ -163,7 +118,9 @@ function createMainWindow() {
     minHeight: 620,
     resizable: true,
     frame: false,
-    backgroundColor: '#04060c',
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: true,
     show: false,
     icon: ICON_PATH,
     webPreferences: {
@@ -326,7 +283,7 @@ ipcMain.handle('app:choose-install-path', async () => {
   if (result.canceled || !result.filePaths[0]) return null;
   // Use exactly the folder the player picked — don't nest a branded
   // subfolder inside it, otherwise re-picking the same folder on a later
-  // "Змінити" click would nest it again (…/UKRAINE ONLINE/UKRAINE ONLINE/game).
+  // "Змінити" click would nest it again (…/WINTER GTA/WINTER GTA/game).
   const base = result.filePaths[0];
 
   if (isInsideLauncherDir(base)) {
@@ -384,10 +341,7 @@ async function runDownload(event) {
     throw new Error('Не вказано посилання для завантаження гри (config.json -> game.downloadUrl).');
   }
 
-  // Some direct-download providers (such as Google Drive) use query-string
-  // URLs that do not end in ".zip". Let config explicitly declare the
-  // archive type so those files are extracted instead of being run as .exe.
-  const isZip = config.game.archiveType === 'zip' || config.game.downloadUrl.toLowerCase().endsWith('.zip');
+  const isZip = config.game.downloadUrl.toLowerCase().endsWith('.zip');
 
   // Staging area lives next to the install folder, on the same drive the
   // player picked in settings, so the download never touches the OS drive
@@ -408,22 +362,7 @@ async function runDownload(event) {
     const multiplier = isZip ? 2.2 : 1.3;
     const safetyMargin = 200 * 1024 * 1024;
     const required = expectedSize * multiplier + safetyMargin;
-    let free = await getFreeSpaceBytes(installBase);
-
-    // When updating an existing installation on a nearly full disk, remove
-    // the old game before downloading the replacement. This is less safe than
-    // retaining the old copy until the new one is ready, but it makes a full
-    // game update possible without requiring space for two game copies.
-    if (free !== null && free < required && fs.existsSync(installPath)) {
-      try {
-        fs.rmSync(installPath, { recursive: true, force: true });
-        saveSettings({ installedVersion: null });
-        free = await getFreeSpaceBytes(installBase);
-      } catch (err) {
-        throw new Error('Не вдалося звільнити місце: закрийте гру та спробуйте ще раз.');
-      }
-    }
-
+    const free = await getFreeSpaceBytes(installBase);
     if (free !== null && free < required) {
       const toGb = (bytes) => (bytes / (1024 ** 3)).toFixed(1);
       throw new Error(
@@ -492,15 +431,7 @@ async function runDownload(event) {
       // scratch staging folder instead, then move the archive's "game"
       // folder into place, so the extraction target is never a drive root.
       const stagingDir = path.join(tempDir, `wintergta-extract-${Date.now()}`);
-      assertCompleteZip(tempFile);
-      try {
-        await extractZip(tempFile, { dir: stagingDir });
-      } catch (err) {
-        if (/central directory|invalid zip|unexpected end/i.test(err.message || '')) {
-          throw new Error('ZIP-архів пошкоджено. Оновіть посилання на файл гри та завантажте його ще раз.');
-        }
-        throw err;
-      }
+      await extractZip(tempFile, { dir: stagingDir });
 
       fs.rmSync(installPath, { recursive: true, force: true });
       moveDirSync(path.join(stagingDir, 'game'), installPath);

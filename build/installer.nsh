@@ -7,9 +7,9 @@
 ; can't be scripted around. We disable that built-in page
 ; (allowToChangeInstallationDirectory: false in package.json) and replace
 ; it with our own nsDialogs page here, which always keeps Install enabled
-; and auto-appends the app folder name ("UKRAINE ONLINE") whenever the chosen
+; and auto-appends the app folder name ("WINTER GTA") whenever the chosen
 ; folder doesn't already end with it — so a player can pick a bare drive
-; letter and land in "F:\UKRAINE ONLINE" instead of getting stuck.
+; letter and land in "F:\WINTER GTA" instead of getting stuck.
 ;
 ; This script is included in both the installer and uninstaller compile
 ; passes, but the page only makes sense for the installer — guard it the
@@ -30,7 +30,7 @@ Var InstallDirText
 
 ; Windows' folder picker returns drive roots WITH a trailing backslash
 ; ("F:\") but regular folders WITHOUT one ("F:\Games") — append naively and
-; a drive-root pick becomes "F:\\UKRAINE ONLINE". Strip any trailing backslash
+; a drive-root pick becomes "F:\\WINTER GTA". Strip any trailing backslash
 ; before appending the app folder name.
 Function StripTrailingSlashAndAppendAppName
   ; in: $0 = path, out: $0 = sanitized path with "${APP_FILENAME}" ensured

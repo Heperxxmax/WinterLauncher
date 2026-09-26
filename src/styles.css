@@ -35,8 +35,8 @@
 }
 
 :root {
-  --accent: #35b7ff;
-  --accent-soft: rgba(53, 183, 255, 0.16);
+  --accent: #f2c300;
+  --accent-soft: rgba(242, 195, 0, 0.16);
   --danger: #e84646;
   --radius-lg: 16px;
   --radius-md: 12px;
@@ -50,7 +50,7 @@
 html, body {
   margin: 0;
   height: 100%;
-  background: #04060c;
+  background: transparent;
   color: #fff;
   font-family: "Manrope", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 14px;
@@ -65,6 +65,8 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  border-radius: 28px;
+  box-shadow: 0 18px 60px rgba(0,0,0,0.45);
   opacity: 1;
   transform: scale(1);
   transform-origin: center;
@@ -86,43 +88,29 @@ body.win-restoring #app {
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* ---------- Backdrop + snow ---------- */
+/* ---------- Backdrop ---------- */
+/* ---------- Backdrop ---------- */
 .backdrop {
   position: absolute;
   inset: 0;
   z-index: 0;
+  overflow: hidden;
   background:
-    radial-gradient(ellipse 70% 55% at 18% 8%, rgba(53, 130, 220, 0.28), transparent 60%),
-    radial-gradient(ellipse 60% 50% at 85% 15%, rgba(90, 170, 255, 0.2), transparent 65%),
-    radial-gradient(ellipse 90% 70% at 50% 105%, rgba(20, 40, 80, 0.55), transparent 70%),
-    linear-gradient(160deg, rgba(10, 18, 32, 0.82) 0%, rgba(5, 8, 16, 0.86) 55%, rgba(4, 6, 12, 0.92) 100%),
-    url("assets/background.png");
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: cover;
+    linear-gradient(180deg, rgba(70, 74, 78, 0.18), rgba(24, 27, 30, 0.58)),
+    url("assets/background.png") center / cover no-repeat;
 }
 
-.snowfall {
+/* Full-screen background blur: the whole launcher backdrop is softened,
+   while all controls and text above it stay crisp and clickable. */
+.backdrop::after {
+  content: "";
   position: absolute;
-  inset: 0;
+  inset: -18px;
   z-index: 1;
   pointer-events: none;
-  overflow: hidden;
-}
-
-.snowfall span {
-  position: absolute;
-  top: -10px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.6);
-  animation-name: wg-snow;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-}
-
-@keyframes wg-snow {
-  0% { transform: translateY(-10px) translateX(0); }
-  100% { transform: translateY(760px) translateX(30px); }
+  background: rgba(24, 27, 30, 0.14);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 @keyframes wg-pulse {
@@ -182,8 +170,10 @@ body.win-restoring #app {
 .nav-link {
   font: 600 13px "Manrope", sans-serif;
   color: #aeb9c9;
-  padding: 8px 14px;
-  border-radius: var(--radius-sm);
+  padding: 9px 18px;
+  min-width: 108px;
+  min-height: 42px;
+  border-radius: 999px;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
@@ -203,8 +193,81 @@ body.win-restoring #app {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   -webkit-app-region: no-drag;
+}
+
+ .ext-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 14px;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.ext-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(32, 34, 36, 0.72);
+  color: #f0f1f2;
+  font: 800 12px "Manrope", sans-serif;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.22);
+}
+
+.ext-link svg {
+  flex: none;
+  pointer-events: none;
+}
+
+.ext-link:hover {
+  color: #fff;
+  background: rgba(52, 54, 57, 0.9);
+  border-color: rgba(255, 255, 255, 0.42);
+  transform: translateY(-1px);
+}
+
+.ext-link:active {
+  transform: translateY(0) scale(0.98);
+}
+
+#link-site {
+  color: #242424;
+  background: linear-gradient(180deg, #ffe36a, #f2c300);
+  border-color: #ffe36a;
+  box-shadow: 0 7px 22px rgba(242, 195, 0, 0.25);
+}
+
+#link-site:hover {
+  color: #111;
+  background: linear-gradient(180deg, #ffea87, #f2c300);
+  border-color: #ffea87;
+}
+
+.ext-link.ext-link-disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.ext-link.ext-link-disabled:hover {
+  color: #f0f1f2;
+  background: rgba(32, 34, 36, 0.72);
+  border-color: rgba(255, 255, 255, 0.22);
+  transform: none;
+}
+
+#link-discord:hover {
+  color: #fff;
+  border-color: rgba(242, 195, 0, 0.65);
+  background: rgba(242, 195, 0, 0.12);
 }
 
 .now-playing {
@@ -266,12 +329,20 @@ button {
   transform: rotate(160deg);
 }
 
-/* ---------- Hero ---------- */
-.hero {
+/* ---------- Content views (Home / News tabs) ---------- */
+.content-view {
   position: relative;
   z-index: 2;
   flex: 1;
   min-height: 0;
+}
+
+.content-view.hidden {
+  display: none;
+}
+
+/* ---------- Hero (Home view) ---------- */
+.hero {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -296,8 +367,8 @@ button {
   display: inline-block;
   width: fit-content;
   background: var(--accent-soft);
-  border: 1px solid rgba(53, 183, 255, 0.5);
-  color: #8fd6ff;
+  border: 1px solid rgba(242, 195, 0, 0.55);
+  color: #ffe36a;
   font: 700 12px "Manrope", sans-serif;
   letter-spacing: 0.08em;
   padding: 6px 13px;
@@ -325,6 +396,84 @@ button {
   text-shadow: 0 2px 14px rgba(0, 0, 0, 0.6);
 }
 
+
+/* ---------- News view ---------- */
+.news-view {
+  display: flex;
+  flex-direction: column;
+  padding: 26px 44px 10px;
+  overflow-y: auto;
+}
+
+.news-view-title {
+  font-family: "Unbounded", "Manrope", sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  margin-bottom: 18px;
+  flex: none;
+}
+
+.news-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 10px;
+}
+
+.news-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 22px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.news-card-cover {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.28;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 65%);
+  mask-image: linear-gradient(90deg, transparent, #000 65%);
+}
+
+.news-card-date {
+  position: relative;
+  display: inline-block;
+  width: fit-content;
+  background: var(--accent-soft);
+  border: 1px solid rgba(242, 195, 0, 0.55);
+  color: #ffe36a;
+  font: 700 11px "Manrope", sans-serif;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  border-radius: 7px;
+}
+
+.news-card-title {
+  position: relative;
+  font-family: "Unbounded", "Manrope", sans-serif;
+  font-weight: 800;
+  font-size: 19px;
+}
+
+.news-card-subtitle {
+  position: relative;
+  font: 500 14px "Manrope", sans-serif;
+  color: #cdd9e8;
+  max-width: 640px;
+}
+
+.news-empty {
+  color: #8b97a8;
+  font-size: 14px;
+}
+
 /* ---------- Bottom dock ---------- */
 .dock {
   position: relative;
@@ -337,93 +486,135 @@ button {
   background: linear-gradient(0deg, rgba(4, 6, 12, 0.92), rgba(4, 6, 12, 0));
 }
 
-.dock-servers {
-  position: relative;
-  display: flex;
-  gap: 10px;
-}
-
-.dock-indicator {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 0;
-  height: 100%;
-  border: 1.5px solid #4bb8ff;
-  border-radius: 13px;
-  box-shadow: 0 0 20px -3px rgba(53, 183, 255, 0.55);
-  transition: transform 0.42s cubic-bezier(0.3, 0.85, 0.3, 1), width 0.42s cubic-bezier(0.3, 0.85, 0.3, 1);
-  pointer-events: none;
-  box-sizing: border-box;
-  z-index: 0;
-}
-
-.server-pill {
-  position: relative;
-  z-index: 1;
+.dock-current {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 10px 14px;
-  border-radius: 13px;
-  background: rgba(255, 255, 255, 0.05);
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.1);
   cursor: pointer;
-  color: #fff;
-  transition: background 0.25s ease;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
 
-.server-pill:hover {
+.dock-current:hover {
   background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(242, 195, 0, 0.55);
 }
 
-.server-pill.disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.server-pill.disabled:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.pill-badge {
-  width: 34px;
-  height: 34px;
+.dock-current-dot {
+  width: 8px;
+  height: 8px;
   flex: none;
-  border-radius: 9px;
-  background: linear-gradient(135deg, #ff8a3d, #e8622a);
-  display: grid;
-  place-items: center;
-  font: 800 13px "Manrope", sans-serif;
-  color: #fff;
+  border-radius: 50%;
+  background: #7c8798;
 }
 
-.pill-info {
-  text-align: left;
+.dock-current-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
 }
 
-.pill-name {
+.dock-current-label {
+  font-size: 10px;
+  color: #8b97a8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.dock-current-name {
   font: 700 13px "Manrope", sans-serif;
   white-space: nowrap;
 }
 
-.pill-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-}
-
-.pill-meta-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+.dock-current-arrow {
+  color: #8b97a8;
   flex: none;
 }
 
-.pill-meta-text {
-  font-size: 11px;
-  color: #aeb9c9;
+/* ---------- Servers sidebar (left, collapsible) ---------- */
+.servers-sidebar {
+  position: absolute;
+  z-index: 20;
+  top: 66px;
+  bottom: 0;
+  left: 0;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  padding: 22px 18px 18px;
+  background: rgba(8, 11, 20, 0.86);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-right: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 24px 0 60px -24px rgba(0, 0, 0, 0.65);
+  transform: translateX(-100%);
+  transition: transform 0.34s cubic-bezier(0.3, 0.85, 0.3, 1);
+}
+
+.servers-sidebar.open {
+  transform: translateX(0);
+}
+
+.sidebar-header {
+  flex: none;
+  margin-bottom: 16px;
+  padding: 0 2px;
+}
+
+.sidebar-servers-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.sidebar-servers-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-servers-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+}
+
+.sidebar-toggle {
+  position: absolute;
+  z-index: 21;
+  top: 55%;
+  left: 0;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 54px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-left: none;
+  border-radius: 0 12px 12px 0;
+  background: rgba(18, 22, 32, 0.9);
+  color: #cdd9e8;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: left 0.34s cubic-bezier(0.3, 0.85, 0.3, 1), background 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-toggle svg {
+  pointer-events: none;
+  transition: transform 0.34s cubic-bezier(0.3, 0.85, 0.3, 1);
+}
+
+.sidebar-toggle:hover {
+  background: rgba(242, 195, 0, 0.22);
+  color: #fff;
+}
+
+.sidebar-toggle.open {
+  left: 300px;
+}
+
+.sidebar-toggle.open svg {
+  transform: rotate(180deg);
 }
 
 .dock-right {
@@ -448,7 +639,7 @@ button {
 }
 
 .status-dot.state-ready { background: #3fd07a; box-shadow: 0 0 12px rgba(63, 208, 122, 0.6); }
-.status-dot.state-busy { background: var(--accent); box-shadow: 0 0 12px rgba(53, 183, 255, 0.6); }
+.status-dot.state-busy { background: var(--accent); box-shadow: 0 0 12px rgba(242, 195, 0, 0.55); }
 .status-dot.state-update { background: #f2b84b; box-shadow: 0 0 12px rgba(242, 184, 75, 0.6); }
 .status-dot.state-running { background: #3fd07a; box-shadow: 0 0 12px rgba(63, 208, 122, 0.6); animation: wg-pulse 1.4s ease-in-out infinite; }
 
@@ -463,16 +654,16 @@ button {
   position: relative;
   width: 280px;
   height: 62px;
-  border: 0;
-  border-radius: 14px;
+  border: 2px solid rgba(255, 227, 106, 0.9);
+  border-radius: 999px;
   color: #fff;
   font-family: "Unbounded", "Manrope", sans-serif;
   font-weight: 800;
   font-size: 17px;
   letter-spacing: 0.04em;
   cursor: pointer;
-  background: linear-gradient(180deg, #3fb9ff, #1e8fe6);
-  box-shadow: 0 16px 40px -10px rgba(30, 143, 230, 0.6);
+  background: linear-gradient(180deg, #ffd83d, #e8b800);
+  box-shadow: 0 16px 40px -10px rgba(232, 184, 0, 0.42);
   transition: filter 0.15s ease, transform 0.12s ease;
 }
 
@@ -485,8 +676,9 @@ button {
 }
 
 .action-btn.state-installed {
-  background: linear-gradient(180deg, #4fdd8c, #25b56a);
-  box-shadow: 0 16px 40px -10px rgba(37, 181, 106, 0.55);
+  background: linear-gradient(180deg, #ffe36a, #e8b800);
+  color: #242424;
+  box-shadow: 0 16px 40px -10px rgba(232, 184, 0, 0.42);
 }
 
 .action-btn.state-update {
@@ -499,9 +691,9 @@ button {
   align-items: center;
   justify-content: center;
   gap: 11px;
-  border: 1px solid rgba(63, 208, 122, 0.5);
-  background: rgba(63, 208, 122, 0.16);
-  color: #7ff0ac;
+  border: 1px solid rgba(242, 195, 0, 0.5);
+  background: rgba(242, 195, 0, 0.12);
+  color: #ffe36a;
   box-shadow: none;
   cursor: default;
 }
@@ -783,56 +975,6 @@ button {
   gap: 14px;
 }
 
-/* news panel contents */
-.news-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.news-card {
-  min-height: 144px;
-  padding: 22px 24px;
-  border: 1px solid rgba(114, 177, 246, 0.2);
-  border-radius: 16px;
-  background-color: rgba(255, 255, 255, 0.04);
-  background-position: center;
-  background-size: cover;
-}
-
-.news-card-date {
-  display: inline-block;
-  padding: 5px 9px;
-  border: 1px solid rgba(83, 193, 255, 0.52);
-  border-radius: 7px;
-  color: #79d2ff;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-}
-
-.news-card-title {
-  margin: 13px 0 7px;
-  color: #fff;
-  font: 800 21px "Unbounded", "Manrope", sans-serif;
-}
-
-.news-card-subtitle {
-  margin: 0;
-  max-width: 720px;
-  color: #c1cde0;
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.news-empty {
-  padding: 32px;
-  border: 1px dashed rgba(255, 255, 255, 0.15);
-  border-radius: 14px;
-  color: #a9b7cb;
-  text-align: center;
-}
-
 .server-card {
   display: flex;
   align-items: center;
@@ -851,7 +993,7 @@ button {
 
 .server-card.active {
   background: var(--accent-soft);
-  border-color: rgba(53, 183, 255, 0.55);
+  border-color: rgba(242, 195, 0, 0.55);
   animation: wg-pop 0.4s cubic-bezier(0.2, 0.75, 0.25, 1);
 }
 
@@ -909,7 +1051,7 @@ button {
 
 .card-load-fill {
   height: 100%;
-  background: linear-gradient(90deg, #35b7ff, #5cc6ff);
+  background: linear-gradient(90deg, #e8b800, #ffe36a);
 }
 
 .card-load-text {
@@ -956,6 +1098,37 @@ button {
   border: 1px solid rgba(232, 70, 70, 0.35);
   padding: 3px 9px;
   border-radius: 999px;
+}
+
+/* Compact server cards inside the narrow sidebar */
+.sidebar-servers-list .server-card {
+  gap: 12px;
+  padding: 14px 14px;
+  align-items: flex-start;
+}
+
+.sidebar-servers-list .card-badge {
+  width: 38px;
+  height: 38px;
+  font-size: 13px;
+  border-radius: 10px;
+}
+
+.sidebar-servers-list .card-name {
+  font-size: 14px;
+}
+
+.sidebar-servers-list .card-mode {
+  font-size: 11px;
+}
+
+.sidebar-servers-list .card-load-track {
+  max-width: none;
+}
+
+.sidebar-servers-list .card-right {
+  flex-direction: column;
+  align-items: flex-end;
 }
 
 /* ---------- Update status text ---------- */
@@ -1023,4 +1196,149 @@ button {
   height: 50px;
   margin-top: 18px;
   font-size: 15px;
+}
+
+/* ---------- Stronger navigation / readable controls ---------- */
+.brand-short {
+  color: #fff;
+  letter-spacing: 0.03em;
+}
+
+.nav-link {
+  min-width: 108px;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #f1f1f1;
+  background: rgba(24, 26, 28, 0.72);
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.22);
+}
+
+.nav-link:hover {
+  color: #fff;
+  background: rgba(45, 47, 49, 0.92);
+  border-color: rgba(242,195,0,0.5);
+}
+
+.nav-link.active {
+  color: #171717;
+  background: linear-gradient(180deg, #ffe36a, #f2c300);
+  border-color: #ffe36a;
+  box-shadow: 0 7px 22px rgba(242,195,0,0.28);
+}
+
+.news-card {
+  border-radius: 24px;
+  background: rgba(24, 26, 28, 0.78);
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.24);
+  padding: 22px 24px;
+}
+
+.news-card:hover {
+  border-color: rgba(242,195,0,0.42);
+  background: rgba(30, 32, 34, 0.88);
+}
+
+.news-card-subtitle {
+  color: #e4e5e7;
+}
+
+.news-read-btn {
+  position: relative;
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid #ffe36a;
+  background: linear-gradient(180deg, #ffe36a, #f2c300);
+  color: #202020;
+  font: 800 12px "Manrope", sans-serif;
+  cursor: pointer;
+  box-shadow: 0 7px 20px rgba(242,195,0,0.2);
+  transition: transform .14s ease, box-shadow .18s ease;
+}
+
+.news-read-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 25px rgba(242,195,0,0.3);
+}
+
+/* ---------- Article modal ---------- */
+.article-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 72px 44px 100px;
+  background: rgba(8, 9, 10, 0.52);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+}
+
+.article-overlay:not(.hidden) {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.article-overlay.hidden { display: grid; }
+
+.article-box {
+  width: min(820px, 92vw);
+  max-height: min(690px, 82vh);
+  overflow: auto;
+  border-radius: 28px;
+  background: rgba(25, 27, 29, 0.96);
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow: 0 24px 70px rgba(0,0,0,0.55);
+  padding: 28px 30px 32px;
+}
+
+.article-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.09);
+}
+
+.article-kicker {
+  color: #ffe36a;
+  font: 800 11px "Manrope", sans-serif;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: 9px;
+}
+
+.article-title {
+  font: 800 clamp(22px, 3vw, 34px) "Unbounded", "Manrope", sans-serif;
+  line-height: 1.15;
+}
+
+.article-body {
+  padding-top: 22px;
+  color: #e3e5e7;
+  font: 500 16px/1.75 "Manrope", sans-serif;
+}
+
+.article-body p {
+  margin: 0 0 17px;
+}
+
+.article-close {
+  flex: none;
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+}
+
+.article-close:hover {
+  background: rgba(242,195,0,0.18);
+  color: #ffe36a;
 }
