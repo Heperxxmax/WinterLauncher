@@ -45,8 +45,9 @@
   ],
   "game": {
     "installDirName": "UKRAINE ONLINE",
-    "exeName": "WINTER GTA.exe",
+    "exeName": "UKRAINE ONLINE.exe",
     "downloadUrl": "https://pub-9443689d7eda4d9bb7e80e8885729852.r2.dev/game.zip",
+    "archiveType": "zip",
     "mtaExeName": "Multi Theft Auto.exe",
     "version": "4.1.0"
   },
