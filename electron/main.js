@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const yauzl = require('yauzl');
 
 const { loadSettings, saveSettings } = require('./store');
 const { queryServer } = require('../lib/aseQuery');
@@ -31,6 +32,25 @@ function moveDirSync(src, dest) {
     fs.cpSync(src, dest, { recursive: true });
     fs.rmSync(src, { recursive: true, force: true });
   }
+}
+
+function getZipUncompressedSize(zipPath) {
+  return new Promise((resolve, reject) => {
+    yauzl.open(zipPath, { lazyEntries: true }, (err, zipfile) => {
+      if (err) return reject(err);
+      let total = 0;
+      zipfile.on('error', reject);
+      zipfile.on('entry', (entry) => {
+        total += Number(entry.uncompressedSize) || 0;
+        zipfile.readEntry();
+      });
+      zipfile.on('end', () => {
+        zipfile.close();
+        resolve(total);
+      });
+      zipfile.readEntry();
+    });
+  });
 }
 
 // Free space on the drive holding `targetPath`, in bytes. Returns null if it
@@ -417,7 +437,7 @@ async function runDownload(event) {
     currentDownloadRequest = null;
   }
 
-  sender.send('download:progress', { phase: 'installing', fraction: 1 });
+  sender.send('download:progress', { phase: 'installing', fraction: 0 });
 
   try {
     if (isZip) {
@@ -431,7 +451,23 @@ async function runDownload(event) {
       // scratch staging folder instead, then move the archive's "game"
       // folder into place, so the extraction target is never a drive root.
       const stagingDir = path.join(tempDir, `wintergta-extract-${Date.now()}`);
-      await extractZip(tempFile, { dir: stagingDir });
+      let totalBytes = 0;
+      try {
+        totalBytes = await getZipUncompressedSize(tempFile);
+      } catch (_) {
+        // Progress is best effort; extraction itself does not depend on it.
+      }
+      let extractedBytes = 0;
+      await extractZip(tempFile, {
+        dir: stagingDir,
+        onEntry: (entry) => {
+          extractedBytes += Number(entry.uncompressedSize) || 0;
+          const fraction = totalBytes
+            ? Math.min(0.99, extractedBytes / totalBytes)
+            : 0;
+          sender.send('download:progress', { phase: 'installing', fraction });
+        },
+      });
 
       fs.rmSync(installPath, { recursive: true, force: true });
       moveDirSync(path.join(stagingDir, 'game'), installPath);

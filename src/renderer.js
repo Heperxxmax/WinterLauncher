@@ -535,7 +535,13 @@
         if (fill) fill.style.width = `${Math.round(fraction * 100)}%`;
         if (pctEl) pctEl.textContent = `${Math.round(fraction * 100)}%`;
       } else if (phase === 'installing') {
-        el('status-text').textContent = 'Встановлення...';
+        state.progress = fraction;
+        const fill = el('progress-fill');
+        const pctEl = document.querySelector('.progress-head .pct');
+        const pct = Math.round(fraction * 100);
+        if (fill) fill.style.width = `${pct}%`;
+        if (pctEl) pctEl.textContent = `${pct}%`;
+        el('status-text').textContent = `Встановлення... ${pct}%`;
       } else if (phase === 'cancelled') {
         state.install = 'notInstalled';
         renderAction();
